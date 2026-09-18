@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    line-height: 1.5;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  h1, h2, h3 {
+    line-height: 1.2;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/70 dark:bg-white/5 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-lg shadow-slate-900/5;
+  }
+  .glass-strong {
+    @apply bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl border border-slate-200 dark:border-white/10;
+  }
+}
+
+/* App background wash */
+.app-bg {
+  background:
+    radial-gradient(1000px 600px at 100% -10%, rgba(59, 130, 246, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(37, 99, 235, 0.08), transparent 55%);
+}
+
+/* Leaflet dark tuning */
+.dark .leaflet-tile {
+  filter: brightness(0.7) invert(0) contrast(1.05) hue-rotate(180deg) saturate(0.9) brightness(0.9);
+}
+.leaflet-container {
+  font-family: 'Heebo', sans-serif;
+  background: #0f172a;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  border-radius: 14px;
+}
+
+/* Dark mode dropdown fix: ensure <option> elements have readable contrast */
+.dark select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+.dark select {
+  color: #f1f5f9;
+}
