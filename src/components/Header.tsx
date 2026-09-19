@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radio, Sun, Moon, Share2, MessageCircle, Send, Link2, Check, Bell, BellRing, Activity, Settings } from 'lucide-react';
+import { Radio, Sun, Moon, Share2, MessageCircle, Send, Link2, Check, Bell, BellRing, Activity } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import Toggle from '@/components/Toggle';
 import type { AllmonStatus } from '@/hooks/useAllstarMonitor';
@@ -50,24 +50,24 @@ export default function Header({ notifPermission, onEnableNotifications, connect
 
   return (
     <header className="sticky top-0 z-40 glass-strong">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-lg shadow-brand-500/30">
-            <Radio className="h-6 w-6" />
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 max-[420px]:min-w-full sm:gap-3">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-lg shadow-brand-500/30 sm:h-11 sm:w-11">
+            <Radio className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
               <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-brand-400" />
               <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-400 ring-2 ring-white dark:ring-slate-900" />
             </span>
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold leading-tight sm:text-xl">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-bold leading-tight sm:text-xl">
               {t('appTitle')}
             </h1>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{t('appTagline')}</p>
+            <p className="hidden truncate text-xs text-slate-500 dark:text-slate-400 min-[380px]:block">{t('appTagline')}</p>
           </div>
         </div>
 
-        <div className="ms-auto flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-1 max-[420px]:w-full sm:ms-auto sm:gap-2">
           {connectedCallsigns.length > 0 && (
             <div className="hidden max-w-[200px] truncate text-xs font-semibold text-slate-500 dark:text-slate-400 lg:block">
               {t('connectedStations')}: {connectedCallsigns.join(', ')}
@@ -124,11 +124,13 @@ export default function Header({ notifPermission, onEnableNotifications, connect
             {notifOn ? t('notificationsOn') : t('enableNotifications')}
           </button>
 
+          {/* Phase 2 - Omni-Rig implementation pending - hidden to prevent TX lockup risk */}
+          {/*
           <button
             type="button"
             onClick={onOpenCatSettings}
             title={t('catSettings')}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full p-2 text-xs font-bold transition sm:px-3 sm:py-2 ${
               catConnected
                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                 : 'glass hover:border-brand-400/60'
@@ -141,6 +143,7 @@ export default function Header({ notifPermission, onEnableNotifications, connect
                 : t('catSettings')}
             </span>
           </button>
+          */}
 
           <Toggle
             checked={lang === 'en'}
@@ -163,7 +166,7 @@ export default function Header({ notifPermission, onEnableNotifications, connect
             <button
               type="button"
               onClick={() => setShareOpen((o) => !o)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-2 text-xs font-bold text-white shadow transition hover:bg-brand-600"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-500 p-2 text-xs font-bold text-white shadow transition hover:bg-brand-600 sm:px-3 sm:py-2"
             >
               <Share2 className="h-4 w-4" />
               <span className="hidden sm:inline">{t('shareApp')}</span>

@@ -37,6 +37,12 @@ export default function ActiveUsers({
   const { t } = useApp();
   const [band, setBand] = useState('');
   const [mode, setMode] = useState('');
+  const [condensed, setCondensed] = useState(() => localStorage.getItem('scq_condensed_view') === '1');
+
+  const handleCondensed = (value: boolean) => {
+    setCondensed(value);
+    localStorage.setItem('scq_condensed_view', value ? '1' : '0');
+  };
 
   const filtered = sessions.filter(
     (s) => (!band || s.band === band) && (!mode || s.mode === mode)
@@ -44,7 +50,14 @@ export default function ActiveUsers({
 
   return (
     <div className="space-y-4">
-      <FilterBar band={band} mode={mode} onBand={setBand} onMode={setMode} />
+      <FilterBar
+        band={band}
+        mode={mode}
+        onBand={setBand}
+        onMode={setMode}
+        condensed={condensed}
+        onCondensed={handleCondensed}
+      />
 
       {loading && (
         <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
@@ -69,7 +82,7 @@ export default function ActiveUsers({
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={`grid sm:grid-cols-2 ${condensed ? 'gap-1.5' : 'gap-3'}`}>
           {filtered.map((s) => (
             <SessionCard
               key={s.id}
@@ -83,6 +96,7 @@ export default function ActiveUsers({
               onDelete={onDelete}
               canDelete={isAdmin || s.callsign.toUpperCase() === myCallsign.toUpperCase()}
               canReport={hasActiveCQ}
+              compact={condensed}
             />
           ))}
         </div>

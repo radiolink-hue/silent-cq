@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Net, NewNet, NetParticipant, NewNetParticipant, SignalReport, NewSignalReport, CqSession, CqSignalReport } from '@/types';
-import { getActiveNet, formatArchiveName, NET_SCHEDULES, NetSchedule } from '@/lib/nets';
+import { getActiveNet, getScheduleUtcWindow } from '@/lib/nets';
+import { fetchServerUtcNow } from '@/lib/serverClock';
+import { DISPLAY_TZ, jerusalemDateToUtcRange, utcDateString, zonedWallTimeToUtc } from '@/lib/netTime';
+import {
+  isLiveSilentCqPost,
+  liveSilentCqCallsigns,
+  planNetParticipantSync,
+  shouldSyncNetSignalReport,
+} from '@/lib/cqPresence';
 
 export function useNets() {
   const [nets, setNets] = useState<Net[]>([]);
@@ -13,11 +21,12 @@ export function useNets() {
   const syncLockRef = useRef(false);
 
   const loadNets = useCallback(async () => {
-    const minDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const utcNow = (await fetchServerUtcNow()) ?? new Date();
+    const cutoff = new Date(utcNow.getTime() - 30 * 24 * 60 * 60 * 1000);
     const { data, error: err } = await supabase
       .from('nets')
       .select('*')
-      .gte('net_date', minDate)
+      .or(`starts_at.gte.${cutoff.toISOString()},and(starts_at.is.null,net_date.gte.${utcDateString(cutoff)})`)
       .order('net_date', { ascending: false });
     if (err) {
       setError(true);
@@ -29,13 +38,28 @@ export function useNets() {
   }, []);
 
   const fetchNetsByDate = useCallback(async (date: string): Promise<Net[]> => {
-    const { data, error: err } = await supabase
-      .from('nets')
-      .select('*')
-      .eq('net_date', date)
-      .order('created_at', { ascending: false });
-    if (err) return [];
-    return data as Net[];
+    const { start, end } = jerusalemDateToUtcRange(date);
+    const [byStart, byDate] = await Promise.all([
+      supabase
+        .from('nets')
+        .select('*')
+        .gte('starts_at', start.toISOString())
+        .lt('starts_at', end.toISOString())
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('nets')
+        .select('*')
+        .eq('net_date', date)
+        .is('starts_at', null)
+        .order('created_at', { ascending: false }),
+    ]);
+    const rows = [...(byStart.data ?? []), ...(byDate.data ?? [])] as Net[];
+    const seen = new Set<string>();
+    return rows.filter((n) => {
+      if (seen.has(n.id)) return false;
+      seen.add(n.id);
+      return true;
+    });
   }, []);
 
   const fetchNetExportData = useCallback(
@@ -68,27 +92,31 @@ export function useNets() {
 
   // --- Auto-create scheduled net if one is active and doesn't exist yet ---
   const ensureScheduledNet = useCallback(async (): Promise<string | null> => {
-    const schedule = getActiveNet();
+    const utcNow = await fetchServerUtcNow();
+    if (!utcNow) return null;
+
+    const schedule = getActiveNet(utcNow);
     if (!schedule) return null;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const { startsAt, endsAt } = getScheduleUtcWindow(schedule, utcNow);
+    const netDate = utcDateString(startsAt);
 
-    // Check if a net for this schedule already exists today
     const { data: existing } = await supabase
       .from('nets')
       .select('id')
-      .eq('net_date', today)
+      .eq('net_date', netDate)
       .ilike('name', `${schedule.name}%`)
       .maybeSingle();
 
     if (existing) return existing.id;
 
-    // Create the net
     const payload: NewNet = {
       name: schedule.name,
-      net_date: today,
+      net_date: netDate,
       frequency: schedule.frequency,
       mode: schedule.mode,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
     };
 
     const { data, error: err } = await supabase
@@ -104,59 +132,52 @@ export function useNets() {
     return net.id;
   }, []);
 
-  // --- Sync active CQ sessions into net participants ---
+  // --- Sync live Silent CQ posts into net participants (login-only users stay out) ---
   const syncParticipants = useCallback(async (netId: string) => {
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessionsError } = await supabase
       .from('cq_sessions')
       .select('*')
       .eq('active', true)
       .order('created_at', { ascending: false });
+    if (sessionsError) return;
 
-    if (!sessions || sessions.length === 0) return;
-
-    const { data: existingParticipants } = await supabase
+    const { data: existingParticipants, error: existingError } = await supabase
       .from('net_participants')
-      .select('callsign')
+      .select('id, callsign')
       .eq('net_id', netId);
+    if (existingError) return;
 
-    const existingCallsigns = new Set(
-      (existingParticipants ?? []).map((p: { callsign: string }) => p.callsign.toUpperCase())
+    const plan = planNetParticipantSync(
+      netId,
+      (sessions ?? []) as CqSession[],
+      (existingParticipants ?? []) as { id: string; callsign: string }[]
     );
 
-    const toInsert: { net_id: string; callsign: string; grid: string; city: string; antenna: string; power: string }[] = [];
-
-    for (const session of sessions as CqSession[]) {
-      const cs = session.callsign.toUpperCase();
-      if (existingCallsigns.has(cs)) continue;
-
-      toInsert.push({
-        net_id: netId,
-        callsign: cs,
-        grid: session.gridsquare || '',
-        city: session.city || '',
-        antenna: session.antenna || '',
-        power: session.power || '',
-      });
+    if (plan.toRemoveIds.length > 0) {
+      await supabase.from('net_participants').delete().in('id', plan.toRemoveIds);
     }
 
-    if (toInsert.length > 0) {
-      await supabase.from('net_participants').insert(toInsert);
+    if (plan.toInsert.length > 0) {
+      await supabase.from('net_participants').insert(plan.toInsert);
     }
   }, []);
 
   // --- Sync CQ signal reports into net signal reports ---
   const syncSignalReports = useCallback(async (netId: string) => {
     // Get all active session IDs
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessionsError } = await supabase
       .from('cq_sessions')
-      .select('id, callsign')
+      .select('id, callsign, active, created_at, band, mode, frequency, allstar_source')
       .eq('active', true);
+    if (sessionsError) return;
 
-    if (!sessions || sessions.length === 0) return;
+    const liveSessions = ((sessions ?? []) as CqSession[]).filter((s) => isLiveSilentCqPost(s));
+    if (liveSessions.length === 0) return;
 
-    const sessionIds = (sessions as { id: string; callsign: string }[]).map((s) => s.id);
+    const liveCallsigns = liveSilentCqCallsigns(liveSessions);
+    const sessionIds = liveSessions.map((s) => s.id);
     const sessionCallsignMap = new Map<string, string>();
-    for (const s of sessions as { id: string; callsign: string }[]) {
+    for (const s of liveSessions) {
       sessionCallsignMap.set(s.id, s.callsign.toUpperCase());
     }
 
@@ -188,6 +209,7 @@ export function useNets() {
       if (!txCallsign) continue;
 
       const rxCallsign = r.reporter_callsign.toUpperCase();
+      if (!shouldSyncNetSignalReport(txCallsign, rxCallsign, liveCallsigns)) continue;
       const key = `${txCallsign}:${rxCallsign}`;
       if (existingKeys.has(key)) continue;
 
@@ -293,9 +315,22 @@ export function useNets() {
   }, [selectedNetId, loadNetDetails]);
 
   const createNet = useCallback(async (payload: NewNet): Promise<{ error: boolean; net?: Net }> => {
+    let insertPayload = payload;
+    if (!payload.starts_at || !payload.ends_at) {
+      const [y, m, d] = payload.net_date.split('-').map((n) => parseInt(n, 10));
+      const startsAt = zonedWallTimeToUtc(DISPLAY_TZ, y, m, d, 0, 0);
+      const endsAt = zonedWallTimeToUtc(DISPLAY_TZ, y, m, d, 23, 59);
+      insertPayload = {
+        ...payload,
+        net_date: utcDateString(startsAt),
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+      };
+    }
+
     const { data, error: err } = await supabase
       .from('nets')
-      .insert(payload)
+      .insert(insertPayload)
       .select()
       .maybeSingle();
     if (err || !data) return { error: true };

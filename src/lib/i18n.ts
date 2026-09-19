@@ -22,6 +22,7 @@ const dict: Dict = {
   noSessions: { he: 'אין תחנות פעילות כרגע. היה הראשון לקרוא CQ שקט!', en: 'No active stations right now. Be the first to call a Silent CQ!' },
   liveNow: { he: 'משדר עכשיו', en: 'Live now' },
   filters: { he: 'סינון', en: 'Filters' },
+  condensedView: { he: 'תצוגה מקוצרת', en: 'Condensed View' },
   allBands: { he: 'כל התדרים', en: 'All bands' },
   allModes: { he: 'כל האופנים', en: 'All modes' },
   clearFilters: { he: 'נקה סינון', en: 'Clear' },
@@ -83,6 +84,7 @@ const dict: Dict = {
 
   loginTitle: { he: 'התחברות', en: 'Login' },
   loginSubtitle: { he: 'הזן את אות הקריאה, ריבוע המיקום והעיר שלך', en: 'Enter your callsign, grid square, and city' },
+  loginCitySubtitle: { he: 'חסרה עיר בפרופיל. הזן את עיר ההפעלה שלך', en: 'Your profile is missing a city. Enter your operating city' },
   loginButton: { he: 'התחבר', en: 'Login' },
   loginCallsignPlaceholder: { he: '', en: '' },
   gridRequired: { he: 'נא להזין ריבוע מיקום', en: 'Gridsquare is required' },

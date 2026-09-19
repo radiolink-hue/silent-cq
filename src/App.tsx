@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqEvent, CqSession, NewCqSession } from '@/types';
 import { gridToLatLng } from '@/lib/maidenhead';
+import {
+  isProfileComplete,
+  loadOperatorProfile,
+  needsCityPrompt,
+  saveOperatorProfile,
+} from '@/lib/operatorProfile';
 import { useApp } from '@/context/AppContext';
 import { useSessions } from '@/hooks/useSessions';
 import { useNets } from '@/hooks/useNets';
@@ -45,12 +51,20 @@ export default function App() {
   const [showTodaysReport, setShowTodaysReport] = useState(false);
   const [showCatSettings, setShowCatSettings] = useState(false);
 
-  const [myCallsign, setMyCallsignState] = useState(() => localStorage.getItem('scq_callsign') || '');
-  const [myGridsquare, setMyGridsquareState] = useState(() => localStorage.getItem('scq_gridsquare') || '');
-  const [myCity, setMyCityState] = useState(() => localStorage.getItem('scq_city') || '');
+  const savedProfile = loadOperatorProfile();
+  const [myCallsign, setMyCallsignState] = useState(savedProfile.callsign);
+  const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
+  const [myCity, setMyCityState] = useState(savedProfile.city);
   const [myPos, setMyPosState] = useState<{ lat: number; lng: number } | null>(() => {
     const raw = localStorage.getItem('scq_pos');
-    return raw ? JSON.parse(raw) : null;
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
+    }
+    return gridToLatLng(savedProfile.gridsquare);
   });
 
   const pushToast = useCallback((toast: ToastItem) => {
@@ -110,9 +124,9 @@ export default function App() {
     setMyCallsignState(callsign);
     setMyGridsquareState(gridsquare);
     setMyCityState(city);
-    localStorage.setItem('scq_callsign', callsign);
-    localStorage.setItem('scq_gridsquare', gridsquare);
-    localStorage.setItem('scq_city', city);
+    saveOperatorProfile({ callsign, gridsquare, city });
+    const coords = gridToLatLng(gridsquare);
+    if (coords) setMyPos(coords);
     if (connectRadio) {
       setShowCatSettings(true);
     }
@@ -155,6 +169,17 @@ export default function App() {
   }, [alert, pushToast]);
 
   const handleSubmit = async (payload: NewCqSession) => {
+    if (payload.city.trim()) {
+      setMyCityState(payload.city.trim());
+      saveOperatorProfile({ city: payload.city.trim() });
+    }
+    if (payload.gridsquare.trim()) {
+      const grid = payload.gridsquare.trim().toUpperCase();
+      setMyGridsquareState(grid);
+      saveOperatorProfile({ gridsquare: grid });
+      const coords = gridToLatLng(grid);
+      if (coords) setMyPos(coords);
+    }
     const res = await createSession(payload);
     return { error: res.error };
   };
@@ -195,14 +220,23 @@ export default function App() {
     (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase()
   );
 
-  if (!myCallsign || !myGridsquare || !myCity) {
-    return <LoginScreen onLogin={handleLogin} initialCity={myCity} />;
+  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity };
+  if (!isProfileComplete(profile)) {
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        initialCallsign={myCallsign}
+        initialGridsquare={myGridsquare}
+        initialCity={myCity}
+        cityOnly={needsCityPrompt(profile)}
+      />
+    );
   }
 
   const connectedCallsigns = sessions.map((s) => s.callsign);
 
   return (
-    <div className="app-bg min-h-screen pb-28 sm:pb-10">
+    <div className="app-bg min-h-screen pb-page-nav sm:pb-10">
       <Header
         notifPermission={permission}
         onEnableNotifications={requestPermission}
@@ -253,6 +287,7 @@ export default function App() {
               onSuccess={() => setTab('active')}
               myCallsign={myCallsign}
               myGridsquare={myGridsquare}
+              myCity={myCity}
               catTelemetry={cat.telemetry}
               catConnected={cat.connected}
               vfoMoving={cat.vfoMoving}

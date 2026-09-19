@@ -1,4 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { parseAllmon2, shouldDropAllstarNode, type ParsedNode } from "./filter.ts";
+import {
+  ALLSTAR_GPS_SOURCE,
+  mergeAllstarGps,
+  parseAllstarMapData,
+  parseAllstarStatsGps,
+  type AllstarGps,
+} from "./gps.ts";
+import { getActiveNet } from "../../../src/lib/nets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,12 +22,13 @@ const COMMENT_TAG = "Auto-ingested from Allmon2 Node 48552";
 const BAND = "Allstar / VoIPC";
 const MODE = "FM / Digital Node";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const USER_AGENT = "SilentCQ-Monitor/1.0";
+/** JSON behind nodeinfo.cgi / the networkMap bubble image (JPEG). */
+const NODE_STATS_URL = `https://stats.allstarlink.org/api/stats/${NODE_ID}`;
+const MAPDATA_URL = "https://stats.allstarlink.org/api/stats/mapData";
+const MAPDATA_TTL_MS = 90 * 1000;
 
-interface ParsedNode {
-  node: string;
-  callsign: string;
-  transmitting: boolean;
-}
+let mapDataCache: { at: number; byNode: Map<string, AllstarGps> } | null = null;
 
 interface GeoResult {
   gridsquare: string;
@@ -29,17 +39,9 @@ interface GeoResult {
   source: string;
 }
 
-// --- IST time check: Thursday 19:25–20:30 ---
-function isAllstarNetActive(): boolean {
-  const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const ist = new Date(utcMs + 3 * 3600000); // IST = UTC+3
-  const day = ist.getDay(); // 0=Sunday ... 4=Thursday
-  const hours = ist.getHours();
-  const minutes = ist.getMinutes();
-  const currentMinutes = hours * 60 + minutes;
-  if (day !== 4) return false; // Thursday only
-  return currentMinutes >= 19 * 60 + 55 && currentMinutes <= 21 * 60;
+// Server UTC clock is master truth. Convert to Asia/Jerusalem only for the schedule window.
+function isAllstarNetActive(utcNow: Date = new Date()): boolean {
+  return getActiveNet(utcNow)?.id === "allstar";
 }
 
 // --- Maidenhead conversion (lat/lng -> 6-char grid) ---
@@ -53,62 +55,6 @@ function latLngToGrid(lat: number, lng: number): string {
   const sub1 = String.fromCharCode(97 + Math.floor(((adjLng % 2) / 2) * 24));
   const sub2 = String.fromCharCode(97 + Math.floor((adjLat % 1) * 24));
   return `${field1}${field2}${square1}${square2}${sub1}${sub2}`;
-}
-
-// --- HTML helpers ---
-function extractText(html: string, start: number, end: number): string {
-  return html
-    .slice(start, end)
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function parseAllmon2(html: string): { nodes: ParsedNode[]; transmittingNode: string | null } {
-  const nodes: ParsedNode[] = [];
-  const seen = new Set<string>();
-  let transmittingNode: string | null = null;
-
-  const tableRe = /<table[^>]*>([\s\S]*?)<\/table>/gi;
-  let tableMatch: RegExpExecArray | null;
-  while ((tableMatch = tableRe.exec(html)) !== null) {
-    const tableHtml = tableMatch[1];
-    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let rowMatch: RegExpExecArray | null;
-    while ((rowMatch = rowRe.exec(tableHtml)) !== null) {
-      const rowHtml = rowMatch[1];
-      const isGreen = /background-color:\s*green|bgcolor=["']?green|class=["']?[^"']*table-success/i.test(rowHtml);
-      const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-      const cells: string[] = [];
-      let cellMatch: RegExpExecArray | null;
-      while ((cellMatch = cellRe.exec(rowHtml)) !== null) {
-        cells.push(extractText(rowHtml, cellMatch.index, cellMatch.index + cellMatch[0].length));
-      }
-      if (cells.length < 2) continue;
-
-      const nodeNum = cells[0].trim();
-      const info = cells[1].trim();
-      if (!nodeNum || !/^\d+$/.test(nodeNum)) continue;
-      if (seen.has(nodeNum)) continue;
-      seen.add(nodeNum);
-
-      const callsign = info.split(/\s+/)[0] || nodeNum;
-      const node: ParsedNode = { node: nodeNum, callsign, transmitting: isGreen };
-      nodes.push(node);
-
-      if (isGreen && !transmittingNode) {
-        transmittingNode = nodeNum;
-      }
-    }
-  }
-
-  return { nodes, transmittingNode };
 }
 
 // --- QRZ.com XML API lookup ---
@@ -127,7 +73,7 @@ async function lookupNominatim(query: string): Promise<{ gridsquare: string; lat
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
       {
         signal: controller.signal,
-        headers: { "User-Agent": "SilentCQ-Monitor/1.0" },
+        headers: { "User-Agent": USER_AGENT },
       },
     );
     clearTimeout(timeout);
@@ -161,7 +107,7 @@ async function geocodeCallsign(
 
   if (cachedRow && cachedRow.gridsquare) {
     const age = Date.now() - new Date(cachedRow.updated_at).getTime();
-    if (age < CACHE_TTL_MS) {
+    if (age < CACHE_TTL_MS || cachedRow.source === ALLSTAR_GPS_SOURCE) {
       return {
         gridsquare: cachedRow.gridsquare,
         lat: cachedRow.lat,
@@ -204,24 +150,105 @@ async function geocodeCallsign(
 
   if (!result) return null;
 
-  // Upsert into cache
-  await supabase
-    .from("callsign_geocache")
-    .upsert(
-      {
-        callsign: upperCallsign,
-        gridsquare: result.gridsquare,
-        lat: result.lat,
-        lng: result.lng,
-        city: result.city,
-        country: result.country,
-        source: result.source,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "callsign" },
-    );
-
+  await upsertGeocache(supabase, upperCallsign, result);
   return result;
+}
+
+async function upsertGeocache(
+  supabase: ReturnType<typeof createClient>,
+  callsign: string,
+  geo: GeoResult,
+): Promise<void> {
+  await supabase.from("callsign_geocache").upsert(
+    {
+      callsign: callsign.toUpperCase(),
+      gridsquare: geo.gridsquare,
+      lat: geo.lat,
+      lng: geo.lng,
+      city: geo.city,
+      country: geo.country,
+      source: geo.source,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "callsign" },
+  );
+}
+
+function gpsToGeo(gps: AllstarGps): GeoResult {
+  return {
+    gridsquare: gps.gridsquare,
+    lat: gps.lat,
+    lng: gps.lng,
+    city: gps.city,
+    country: gps.country,
+    source: gps.source,
+  };
+}
+
+async function fetchJson(url: string): Promise<unknown | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchText(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": USER_AGENT },
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return null;
+    return await resp.text();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMapDataGps(): Promise<Map<string, AllstarGps>> {
+  if (mapDataCache && Date.now() - mapDataCache.at < MAPDATA_TTL_MS) {
+    return mapDataCache.byNode;
+  }
+  const text = await fetchText(MAPDATA_URL);
+  const byNode = text ? parseAllstarMapData(text) : (mapDataCache?.byNode ?? new Map());
+  if (text) mapDataCache = { at: Date.now(), byNode };
+  return byNode;
+}
+
+/** Precise GPS from AllStar stats/networkMap; empty map if both feeds fail. */
+async function fetchAllstarGpsByNode(neededNodes: string[]): Promise<Map<string, AllstarGps>> {
+  const statsPayload = await fetchJson(NODE_STATS_URL);
+  const fromStats = parseAllstarStatsGps(statsPayload);
+  const missing = neededNodes.filter((n) => n && !fromStats.has(n));
+  if (missing.length === 0) return fromStats;
+  const mapData = await fetchMapDataGps();
+  return mergeAllstarGps(fromStats, mapData);
+}
+
+async function resolveNodeGeo(
+  supabase: ReturnType<typeof createClient>,
+  node: ParsedNode,
+  gpsByNode: Map<string, AllstarGps>,
+): Promise<GeoResult | null> {
+  const gps = gpsByNode.get(node.node);
+  if (gps) {
+    const geo = gpsToGeo(gps);
+    await upsertGeocache(supabase, node.callsign, geo);
+    return geo;
+  }
+  return geocodeCallsign(supabase, node.callsign);
 }
 
 // --- Handle callsign geocache lookup for the CallsignModal ---
@@ -265,7 +292,7 @@ async function handleCallsignLookup(
 }
 
 const MOCK_NODES: ParsedNode[] = [
-  { node: "48552", callsign: "4X1DA", transmitting: true },
+  { node: "429730", callsign: "4X1DA", transmitting: true },
   { node: "48400", callsign: "4Z4DX", transmitting: false },
   { node: "48301", callsign: "4X1ABC", transmitting: false },
 ];
@@ -322,7 +349,7 @@ Deno.serve(async (req: Request) => {
       const timeout = setTimeout(() => controller.abort(), 8000);
       const resp = await fetch(ALLMON_URL, {
         signal: controller.signal,
-        headers: { "User-Agent": "SilentCQ-Monitor/1.0" },
+        headers: { "User-Agent": USER_AGENT },
       });
       clearTimeout(timeout);
       if (resp.ok) {
@@ -340,13 +367,15 @@ Deno.serve(async (req: Request) => {
     if (live && html) {
       parsed = parseAllmon2(html);
       if (parsed.nodes.length === 0) {
-        parsed = { nodes: MOCK_NODES, transmittingNode: "48552" };
+        parsed = { nodes: MOCK_NODES, transmittingNode: "429730" };
         live = false;
       }
     } else {
-      parsed = { nodes: MOCK_NODES, transmittingNode: "48552" };
+      parsed = { nodes: MOCK_NODES, transmittingNode: "429730" };
       live = false;
     }
+
+    const gpsByNode = await fetchAllstarGpsByNode(parsed.nodes.map((n) => n.node));
 
     const { data: existing } = await supabase
       .from("cq_sessions")
@@ -369,18 +398,39 @@ Deno.serve(async (req: Request) => {
       allstar_source: string;
       active: boolean;
       gridsquare?: string;
-      lat?: number;
-      lng?: number;
+      lat?: number | null;
+      lng?: number | null;
       city?: string;
       country?: string;
     }[] = [];
 
     for (const node of parsed.nodes) {
+      if (shouldDropAllstarNode(node.node, node.callsign, node.callsign)) continue;
+
       const sourceKey = `${SOURCE_TAG}:${node.node}`;
       staleSources.delete(sourceKey);
-      if (existingNodes.has(sourceKey)) continue;
 
-      const geo = await geocodeCallsign(supabase, node.callsign);
+      const sessionId = existingNodes.get(sourceKey);
+      if (sessionId) {
+        const gps = gpsByNode.get(node.node);
+        if (gps) {
+          const geo = gpsToGeo(gps);
+          await upsertGeocache(supabase, node.callsign, geo);
+          await supabase
+            .from("cq_sessions")
+            .update({
+              gridsquare: geo.gridsquare,
+              lat: geo.lat,
+              lng: geo.lng,
+              city: geo.city || undefined,
+              country: geo.country || undefined,
+            })
+            .eq("id", sessionId);
+        }
+        continue;
+      }
+
+      const geo = await resolveNodeGeo(supabase, node, gpsByNode);
 
       upserts.push({
         callsign: node.callsign,
@@ -420,7 +470,7 @@ Deno.serve(async (req: Request) => {
           .eq("id", txRow.id);
       } else {
         const txNode = parsed.nodes.find((n) => n.node === parsed.transmittingNode);
-        if (txNode) {
+        if (txNode && !shouldDropAllstarNode(txNode.node, txNode.callsign, txNode.callsign)) {
           const { data: checkRow } = await supabase
             .from("cq_sessions")
             .select("id")
@@ -428,7 +478,7 @@ Deno.serve(async (req: Request) => {
             .eq("allstar_source", txSourceKey)
             .maybeSingle();
           if (!checkRow) {
-            const geo = await geocodeCallsign(supabase, txNode.callsign);
+            const geo = await resolveNodeGeo(supabase, txNode, gpsByNode);
             await supabase.from("cq_sessions").insert({
               callsign: txNode.callsign,
               band: BAND,
@@ -460,6 +510,7 @@ Deno.serve(async (req: Request) => {
         transmittingNode: parsed.transmittingNode,
         error: fetchError,
         upserted: upserts.length,
+        gpsNodes: gpsByNode.size,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

@@ -49,35 +49,31 @@ export default function SessionCard({
     setSelectedSignal('');
   };
 
-  const myReport = reports.find(
-    (r) => r.reporter_callsign.toUpperCase() === myCallsign.toUpperCase()
-  );
-
   return (
-    <article className="animate-fade-up rounded-3xl glass p-4 transition hover:border-brand-400/50 hover:shadow-xl hover:shadow-brand-500/5">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500/15 text-brand-600 dark:text-brand-300">
-          <Radio className="h-6 w-6" />
+    <article className={`animate-fade-up glass transition hover:border-brand-400/50 hover:shadow-xl hover:shadow-brand-500/5 ${compact ? 'rounded-2xl p-2' : 'rounded-3xl p-4'}`}>
+      <div className={`flex flex-wrap items-start ${compact ? 'gap-1.5' : 'gap-3'}`}>
+        <div className={`flex shrink-0 items-center justify-center bg-brand-500/15 text-brand-600 dark:text-brand-300 ${compact ? 'h-7 w-7 rounded-xl' : 'h-12 w-12 rounded-2xl'}`}>
+          <Radio className={compact ? 'h-3.5 w-3.5' : 'h-6 w-6'} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold tracking-wide"><CallsignLink callsign={session.callsign} /></h3>
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-bold text-brand-600 dark:text-brand-300">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
+          <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+            <h3 className={`font-bold tracking-wide ${compact ? 'text-sm' : 'text-xl'}`}><CallsignLink callsign={session.callsign} /></h3>
+            <span className={`inline-flex items-center gap-1 rounded-full bg-brand-500/15 font-bold text-brand-600 dark:text-brand-300 ${compact ? 'px-1.5 py-0 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+              <span className={`animate-pulse rounded-full bg-brand-500 ${compact ? 'h-1 w-1' : 'h-1.5 w-1.5'}`} />
               {t('liveNow')}
             </span>
           </div>
           {location && (
-            <p className="mt-0.5 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-              <MapPin className="h-3.5 w-3.5" />
+            <p className={`flex items-center gap-1 text-slate-500 dark:text-slate-400 ${compact ? 'mt-0 text-[11px]' : 'mt-0.5 text-sm'}`}>
+              <MapPin className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
               {location}
             </p>
           )}
         </div>
         <div className="text-end">
-          <div className="flex items-center justify-end gap-2">
-            <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-white/5 dark:text-slate-300">
-              <Users className="h-3.5 w-3.5 text-brand-500" />
+          <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
+            <div className={`inline-flex items-center gap-1 rounded-full bg-slate-100 font-semibold text-slate-600 dark:bg-white/5 dark:text-slate-300 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'}`}>
+              <Users className={`text-brand-500 ${compact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
               {t('heardCount')}: <span className="font-bold text-brand-600 dark:text-brand-300">{session.heard_count}</span>
             </div>
             {canDelete && onDelete && (
@@ -86,49 +82,48 @@ export default function SessionCard({
                 onClick={() => onDelete(session)}
                 aria-label={t('delete')}
                 title={t('delete')}
-                className="inline-flex items-center justify-center rounded-full bg-red-500/10 p-1.5 text-red-500 transition hover:bg-red-500/20 active:scale-95"
+                className={`inline-flex items-center justify-center rounded-full bg-red-500/10 text-red-500 transition hover:bg-red-500/20 active:scale-95 ${compact ? 'p-1' : 'p-1.5'}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
               </button>
             )}
           </div>
-          <p className="mt-1 flex items-center justify-end gap-1 text-xs text-slate-400">
-            <Clock className="h-3 w-3" />
+          <p className={`flex items-center justify-end gap-1 text-slate-400 ${compact ? 'mt-0.5 text-[10px]' : 'mt-1 text-xs'}`}>
+            <Clock className={compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
             {timeAgo(session.created_at, t)}
           </p>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {session.band && <Chip>{session.band}</Chip>}
-        {session.mode && <Chip>{session.mode}</Chip>}
-        {session.frequency && <Chip>{session.frequency} MHz</Chip>}
-        {session.gridsquare && <Chip>{t('grid')}: {session.gridsquare}</Chip>}
-        {distance != null && <Chip highlight>{distance} km</Chip>}
+      <div className={`flex flex-wrap ${compact ? 'mt-1.5 gap-1' : 'mt-3 gap-2'}`}>
+        {session.band && <Chip compact={compact}>{session.band}</Chip>}
+        {session.mode && <Chip compact={compact}>{session.mode}</Chip>}
+        {session.frequency && <Chip compact={compact}>{session.frequency} MHz</Chip>}
+        {session.gridsquare && <Chip compact={compact}>{t('grid')}: {session.gridsquare}</Chip>}
+        {distance != null && <Chip compact={compact} highlight>{distance} km</Chip>}
       </div>
 
-      {!compact && (
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-          {session.power && <Meta icon={<Zap className="h-4 w-4" />} label={t('power')} value={session.power} />}
-          {session.antenna && <Meta icon={<AntennaIcon className="h-4 w-4" />} label={t('antenna')} value={session.antenna} />}
+      {(session.power || session.antenna) && (
+        <div className={`grid grid-cols-2 text-sm sm:grid-cols-3 ${compact ? 'mt-1.5 gap-1' : 'mt-3 gap-2'}`}>
+          {session.power && <Meta compact={compact} icon={<Zap className={compact ? 'h-3 w-3' : 'h-4 w-4'} />} label={t('power')} value={session.power} />}
+          {session.antenna && <Meta compact={compact} icon={<AntennaIcon className={compact ? 'h-3 w-3' : 'h-4 w-4'} />} label={t('antenna')} value={session.antenna} />}
         </div>
       )}
 
-      {session.comments && !compact && (
-        <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">
+      {session.comments && (
+        <p className={`text-slate-600 dark:bg-white/5 dark:text-slate-300 ${compact ? 'mt-1.5 truncate rounded-xl bg-slate-50 px-2 py-0.5 text-[11px]' : 'mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm'}`}>
           {session.comments}
         </p>
       )}
 
-      {/* Reporters list */}
       {reports.length > 0 && (
-        <div className="mt-3 space-y-1.5">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('reporters')}:</p>
+        <div className={compact ? 'mt-1.5 space-y-0.5' : 'mt-3 space-y-1.5'}>
+          <p className={`font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${compact ? 'text-[10px]' : 'text-xs'}`}>{t('reporters')}:</p>
           {reports.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-xs dark:bg-white/5">
+            <div key={r.id} className={`flex items-center justify-between gap-2 bg-slate-50 text-xs dark:bg-white/5 ${compact ? 'rounded-lg px-2 py-0.5' : 'rounded-xl px-2.5 py-1.5'}`}>
               <div className="flex items-center gap-2">
                 <CallsignLink callsign={r.reporter_callsign} className="text-xs" />
-                <span className="rounded-full bg-brand-500/15 px-2 py-0.5 font-mono font-bold text-brand-600 dark:text-brand-300">
+                <span className={`rounded-full bg-brand-500/15 font-mono font-bold text-brand-600 dark:text-brand-300 ${compact ? 'px-1.5 py-0' : 'px-2 py-0.5'}`}>
                   {r.signal_report}
                 </span>
               </div>
@@ -151,15 +146,14 @@ export default function SessionCard({
         </div>
       )}
 
-      {/* Signal report selector — hidden for own CQ entry */}
-      {!compact && session.callsign.toUpperCase() !== myCallsign.toUpperCase() && (
-        <div className="mt-4 flex gap-2">
+      {session.callsign.toUpperCase() !== myCallsign.toUpperCase() && (
+        <div className={`flex gap-2 ${compact ? 'mt-2' : 'mt-4'}`}>
           {hasReported ? (
-            <div className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-500 dark:bg-white/5 dark:text-slate-400">
+            <div className={`flex flex-1 items-center justify-center gap-2 bg-slate-100 font-bold text-slate-500 dark:bg-white/5 dark:text-slate-400 ${compact ? 'rounded-xl px-2 py-1 text-[11px]' : 'rounded-2xl px-4 py-2.5 text-sm'}`}>
               {t('alreadyReported')}
             </div>
           ) : !canReport ? (
-            <div className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-500/10 px-4 py-2.5 text-sm font-bold text-amber-600 dark:text-amber-400">
+            <div className={`flex flex-1 items-center justify-center gap-2 bg-amber-500/10 font-bold text-amber-600 dark:text-amber-400 ${compact ? 'rounded-xl px-2 py-1 text-[11px]' : 'rounded-2xl px-4 py-2.5 text-sm'}`}>
               {t('reportGateBlocked')}
             </div>
           ) : (
@@ -167,7 +161,7 @@ export default function SessionCard({
               <select
                 value={selectedSignal}
                 onChange={(e) => setSelectedSignal(e.target.value)}
-                className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+                className={`flex-1 border border-slate-200 bg-white font-bold text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 ${compact ? 'rounded-xl px-2 py-1 text-[11px]' : 'rounded-2xl px-3 py-2.5 text-sm'}`}
               >
                 <option value="">{t('signalReport')}</option>
                 {SIGNAL_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -176,7 +170,7 @@ export default function SessionCard({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!selectedSignal}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-[0.98] disabled:opacity-50"
+                className={`inline-flex items-center justify-center gap-2 bg-brand-500 font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-[0.98] disabled:opacity-50 ${compact ? 'rounded-xl px-3 py-1 text-[11px]' : 'rounded-2xl px-5 py-2.5 text-sm'}`}
               >
                 {t('submitReport')}
               </button>
@@ -184,8 +178,8 @@ export default function SessionCard({
           )}
         </div>
       )}
-      {!compact && session.callsign.toUpperCase() === myCallsign.toUpperCase() && (
-        <div className="mt-4 flex items-center justify-center rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-400 dark:bg-white/5 dark:text-slate-500">
+      {session.callsign.toUpperCase() === myCallsign.toUpperCase() && (
+        <div className={`flex items-center justify-center bg-slate-100 font-bold text-slate-400 dark:bg-white/5 dark:text-slate-500 ${compact ? 'mt-2 rounded-xl px-2 py-1 text-[11px]' : 'mt-4 rounded-2xl px-4 py-2.5 text-sm'}`}>
           {t('selfReportBlocked')}
         </div>
       )}
@@ -193,10 +187,12 @@ export default function SessionCard({
   );
 }
 
-function Chip({ children, highlight }: { children: React.ReactNode; highlight?: boolean }) {
+function Chip({ children, highlight, compact }: { children: React.ReactNode; highlight?: boolean; compact?: boolean }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-1 font-mono text-xs font-semibold ${
+      className={`rounded-full font-mono font-semibold ${
+        compact ? 'px-1.5 py-0 text-[10px]' : 'px-2.5 py-1 text-xs'
+      } ${
         highlight
           ? 'bg-brand-500/15 text-brand-600 dark:text-brand-300'
           : 'bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-200'
@@ -207,13 +203,13 @@ function Chip({ children, highlight }: { children: React.ReactNode; highlight?: 
   );
 }
 
-function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function Meta({ icon, label, value, compact }: { icon: React.ReactNode; label: string; value: string; compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 dark:bg-white/5">
+    <div className={`flex items-center bg-slate-50 dark:bg-white/5 ${compact ? 'gap-1 rounded-xl px-2 py-1' : 'gap-2 rounded-2xl px-3 py-2'}`}>
       <span className="text-brand-500">{icon}</span>
       <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="truncate font-semibold text-slate-700 dark:text-slate-200">{value}</p>
+        <p className={`uppercase tracking-wide text-slate-400 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>{label}</p>
+        <p className={`truncate font-semibold text-slate-700 dark:text-slate-200 ${compact ? 'text-xs' : ''}`}>{value}</p>
       </div>
     </div>
   );

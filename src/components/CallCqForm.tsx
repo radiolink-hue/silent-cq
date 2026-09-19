@@ -4,6 +4,7 @@ import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession } from '@/types'
 import { useApp } from '@/context/AppContext';
 import { gridToLatLng } from '@/lib/maidenhead';
 import { getActiveNet, type NetSchedule } from '@/lib/nets';
+import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import type { CatTelemetry } from '@/hooks/useCatControl';
 
 interface CallCqFormProps {
@@ -11,6 +12,7 @@ interface CallCqFormProps {
   onSuccess: () => void;
   myCallsign: string;
   myGridsquare: string;
+  myCity: string;
   catTelemetry: CatTelemetry | null;
   catConnected: boolean;
   vfoMoving: boolean;
@@ -32,37 +34,40 @@ export default function CallCqForm({
   onSuccess,
   myCallsign,
   myGridsquare,
+  myCity,
   catTelemetry,
   catConnected,
   vfoMoving,
   settlingSeconds,
 }: CallCqFormProps) {
   const { t } = useApp();
-  const [form, setForm] = useState(empty);
+  const utcNow = useServerUtcNow();
+  const [form, setForm] = useState({ ...empty, city: myCity });
   const [gridsquare, setGridsquare] = useState(myGridsquare);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [activeNet, setActiveNet] = useState<NetSchedule | null>(null);
 
   useEffect(() => {
-    const checkNet = () => {
-      const net = getActiveNet();
-      setActiveNet(net);
-      if (net) {
-        setForm((f) => ({
-          ...f,
-          band: net.band,
-          mode: net.mode,
-          frequency: net.frequency,
-          power: net.power,
-          antenna: net.id === 'allstar' ? 'Vertical' : f.antenna,
-        }));
-      }
-    };
-    checkNet();
-    const interval = setInterval(checkNet, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    setGridsquare(myGridsquare);
+    setForm((f) => ({ ...f, city: f.city || myCity }));
+  }, [myGridsquare, myCity]);
+
+  useEffect(() => {
+    if (!utcNow) return;
+    const net = getActiveNet(utcNow);
+    setActiveNet(net);
+    if (net) {
+      setForm((f) => ({
+        ...f,
+        band: net.band,
+        mode: net.mode,
+        frequency: net.frequency,
+        power: net.power,
+        antenna: net.id === 'allstar' ? 'Vertical' : f.antenna,
+      }));
+    }
+  }, [utcNow]);
 
   useEffect(() => {
     if (!catConnected || !catTelemetry) return;
@@ -129,8 +134,8 @@ export default function CallCqForm({
     const ok = await doSubmit(payload);
     setSubmitting(false);
     if (ok) {
-      setForm(empty);
-      setGridsquare(myGridsquare);
+      setForm({ ...empty, city: payload.city.trim() || myCity });
+      setGridsquare(payload.gridsquare.trim().toUpperCase() || myGridsquare);
       onSuccess();
     }
   };

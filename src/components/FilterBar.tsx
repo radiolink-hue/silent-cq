@@ -7,9 +7,11 @@ interface FilterBarProps {
   mode: string;
   onBand: (b: string) => void;
   onMode: (m: string) => void;
+  condensed: boolean;
+  onCondensed: (value: boolean) => void;
 }
 
-export default function FilterBar({ band, mode, onBand, onMode }: FilterBarProps) {
+export default function FilterBar({ band, mode, onBand, onMode, condensed, onCondensed }: FilterBarProps) {
   const { t } = useApp();
   const active = band || mode;
 
@@ -47,6 +49,15 @@ export default function FilterBar({ band, mode, onBand, onMode }: FilterBarProps
           {t('clearFilters')}
         </button>
       )}
+      <label className="ms-auto inline-flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1 text-sm font-medium text-slate-600 dark:text-slate-300">
+        <input
+          type="checkbox"
+          checked={condensed}
+          onChange={(e) => onCondensed(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-white/5"
+        />
+        {t('condensedView')}
+      </label>
     </div>
   );
 }

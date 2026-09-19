@@ -73,14 +73,14 @@ export function pdfDate(iso: string): string {
   }
 }
 
-/** Format a time for PDF: HH:MM (24h, UTC) */
+/** Format a time for PDF: HH:MM (24h, Asia/Jerusalem) */
 export function pdfTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString('en-GB', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-      timeZone: 'UTC',
+      timeZone: 'Asia/Jerusalem',
     });
   } catch {
     return '';

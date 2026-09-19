@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
-
-const SESSION_TTL_MS = 90 * 60 * 1000; // 90 minutes
-
-function isExpired(session: CqSession): boolean {
-  return Date.now() - new Date(session.created_at).getTime() > SESSION_TTL_MS;
-}
+import { isExpiredCqSession } from '@/lib/cqPresence';
 
 function filterExpired(list: CqSession[]): CqSession[] {
-  return list.filter((s) => !isExpired(s));
+  return list.filter((s) => !isExpiredCqSession(s));
 }
 
 export function useSessions() {
@@ -55,13 +50,13 @@ export function useSessions() {
           setSessions((prev) => {
             if (payload.eventType === 'INSERT') {
               const row = payload.new as CqSession;
-              if (!row.active || isExpired(row)) return prev;
+              if (!row.active || isExpiredCqSession(row)) return prev;
               if (prev.some((s) => s.id === row.id)) return prev;
               return [row, ...prev];
             }
             if (payload.eventType === 'UPDATE') {
               const row = payload.new as CqSession;
-              if (!row.active || isExpired(row)) return prev.filter((s) => s.id !== row.id);
+              if (!row.active || isExpiredCqSession(row)) return prev.filter((s) => s.id !== row.id);
               return prev.map((s) => (s.id === row.id ? row : s));
             }
             if (payload.eventType === 'DELETE') {
@@ -87,8 +82,8 @@ export function useSessions() {
   useEffect(() => {
     const interval = setInterval(() => {
       setSessions((prev) => {
-        const expired = prev.filter(isExpired);
-        const kept = prev.filter((s) => !isExpired(s));
+        const expired = prev.filter((s) => isExpiredCqSession(s));
+        const kept = prev.filter((s) => !isExpiredCqSession(s));
         if (expired.length > 0) {
           (async () => {
             await supabase

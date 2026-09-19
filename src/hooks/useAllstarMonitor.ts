@@ -14,29 +14,12 @@ interface AllmonResponse {
 
 const POLL_INTERVAL_MS = 30_000;
 
-// Thursday 19:25–20:30 IST (UTC+3)
-function isAllstarNetActive(): boolean {
-  const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const ist = new Date(utcMs + 3 * 3600000);
-  const day = ist.getDay();
-  const currentMinutes = ist.getHours() * 60 + ist.getMinutes();
-  if (day !== 4) return false;
-  return currentMinutes >= 19 * 60 + 55 && currentMinutes <= 21 * 60;
-}
-
 export function useAllstarMonitor() {
   const [status, setStatus] = useState<AllmonStatus>('idle');
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const mounted = useRef(true);
 
   const poll = useCallback(async () => {
-    // Only poll during the Thursday Allstar net window
-    if (!isAllstarNetActive()) {
-      if (mounted.current) setStatus('idle');
-      return;
-    }
-
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/allmon2`;
       const headers: Record<string, string> = {

@@ -99,6 +99,8 @@ export interface Net {
   frequency: string;
   mode: string;
   created_at: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
 }
 
 export type NewNet = Omit<Net, 'id' | 'created_at'>;

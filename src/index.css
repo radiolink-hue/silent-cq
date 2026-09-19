@@ -55,3 +55,13 @@
 .dark select {
   color: #f1f5f9;
 }
+
+/* Mobile tab bar: home-indicator + Bolt badge clearance */
+@media (max-width: 639px) {
+  .pb-nav-safe {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px) + 2.25rem);
+  }
+  .pb-page-nav {
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

@@ -38,7 +38,7 @@ export default function ReportButton({ sessions, activeTab }: ReportButtonProps)
   return (
     <a
       href={buildMailto()}
-      className="fixed bottom-24 z-40 inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-amber-500/30 transition hover:bg-amber-600 active:scale-95 sm:bottom-6 ltr:right-4 rtl:left-4 sm:ltr:right-6 sm:rtl:left-6"
+      className="fixed bottom-[calc(7rem+env(safe-area-inset-bottom,0px))] z-40 inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-amber-500/30 transition hover:bg-amber-600 active:scale-95 sm:bottom-6 ltr:right-4 rtl:left-4 sm:ltr:right-6 sm:rtl:left-6"
       title={t('reportBug')}
     >
       <Bug className="h-5 w-5" />

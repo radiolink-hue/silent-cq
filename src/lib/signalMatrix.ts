@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { Net, NetParticipant, SignalReport } from '@/types';
 import { sanitizeForPdf } from '@/lib/pdfSanitize';
+import { formatJerusalemDateTime } from '@/lib/netTime';
 
 export function buildSignalMatrix(
   participants: NetParticipant[],
@@ -86,7 +87,9 @@ export function downloadSignalMatrix(
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Signal Matrix');
 
-    const dateStr = net.net_date || new Date().toISOString().slice(0, 10);
+    const dateStr = net.starts_at
+      ? new Date(net.starts_at).toISOString().slice(0, 10)
+      : net.net_date || new Date().toISOString().slice(0, 10);
     const filename = `Signal_Matrix_${dateStr}_${net.id}.xlsx`;
 
     XLSX.writeFile(wb, filename);
@@ -110,7 +113,11 @@ export function downloadNetPdf(
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     const title = sanitizeForPdf(net.name) || `${sanitizeForPdf(net.frequency)} ${sanitizeForPdf(net.mode)}`;
-    doc.text(`${title} — ${sanitizeForPdf(net.net_date)}`, margin, y);
+    doc.text(
+      `${title} — ${sanitizeForPdf(net.starts_at ? formatJerusalemDateTime(net.starts_at) : net.net_date)}`,
+      margin,
+      y
+    );
     y += 6;
 
     doc.setFontSize(9);
@@ -169,7 +176,9 @@ export function downloadNetPdf(
       }
     }
 
-    const dateStr = sanitizeForPdf(net.net_date) || new Date().toISOString().slice(0, 10);
+    const dateStr = sanitizeForPdf(
+      net.starts_at ? new Date(net.starts_at).toISOString().slice(0, 10) : net.net_date
+    ) || new Date().toISOString().slice(0, 10);
     doc.save(`Signal_Matrix_${dateStr}_${net.id}.pdf`);
     return true;
   } catch {

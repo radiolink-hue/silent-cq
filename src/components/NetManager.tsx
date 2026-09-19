@@ -5,7 +5,9 @@ import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CallsignLink from '@/components/CallsignLink';
-import { NET_SCHEDULES, getActiveNet } from '@/lib/nets';
+import { getActiveNet } from '@/lib/nets';
+import { useServerUtcNow } from '@/hooks/useServerUtcNow';
+import { formatJerusalemDateTime, jerusalemDateString } from '@/lib/netTime';
 
 interface NetManagerProps {
   nets: Net[];
@@ -29,7 +31,7 @@ interface NetManagerProps {
 
 const emptyNet: NewNet = {
   name: '',
-  net_date: new Date().toISOString().slice(0, 10),
+  net_date: '',
   frequency: '',
   mode: 'USB',
 };
@@ -68,6 +70,7 @@ export default function NetManager({
   onToast,
 }: NetManagerProps) {
   const { t } = useApp();
+  const utcNow = useServerUtcNow();
   const [showCreate, setShowCreate] = useState(false);
   const [netForm, setNetForm] = useState<NewNet>(emptyNet);
   const [creating, setCreating] = useState(false);
@@ -77,9 +80,11 @@ export default function NetManager({
   const [rForm, setRForm] = useState<NewSignalReport>(emptyReport);
   const [pendingNetDelete, setPendingNetDelete] = useState<Net | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const minDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const [exportDate, setExportDate] = useState(today);
+  const today = utcNow ? jerusalemDateString(utcNow) : '';
+  const minDate = utcNow
+    ? jerusalemDateString(new Date(utcNow.getTime() - 30 * 24 * 60 * 60 * 1000))
+    : '';
+  const [exportDate, setExportDate] = useState('');
   const [dateFilteredNets, setDateFilteredNets] = useState<Net[]>([]);
   const [exportNetId, setExportNetId] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -89,8 +94,11 @@ export default function NetManager({
   const isHFNet = selectedNet ? !['FM', 'FT8', 'FT4', 'VARAC', 'SATELLITE', 'DIGITAL VOICE'].includes(selectedNet.mode) : true;
 
   useEffect(() => {
+    if (!today) return;
+    setExportDate((prev) => prev || today);
+    setNetForm((f) => (f.net_date ? f : { ...f, net_date: today }));
     void handleDateChange(today);
-  }, []);
+  }, [today]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +108,7 @@ export default function NetManager({
     if (res.error) {
       onToast(t('netExportError'), '', true);
     } else {
-      setNetForm(emptyNet);
+      setNetForm({ ...emptyNet, net_date: today });
       setShowCreate(false);
     }
   };
@@ -280,7 +288,7 @@ export default function NetManager({
             <option value="">—</option>
             {nets.map((n) => (
               <option key={n.id} value={n.id}>
-                {n.name || n.frequency} · {n.net_date} · {n.frequency} {n.mode}
+                {n.name || n.frequency} · {n.starts_at ? formatJerusalemDateTime(n.starts_at) : n.net_date} · {n.frequency} {n.mode}
               </option>
             ))}
           </select>
@@ -306,7 +314,7 @@ export default function NetManager({
                 <h3 className="text-lg font-bold">
                   {selectedNet.name || `${selectedNet.frequency} ${selectedNet.mode}`}
                 </h3>
-                {getActiveNet() && (
+                {utcNow && getActiveNet(utcNow) && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                     {t('netAutoSynced')}
@@ -314,7 +322,7 @@ export default function NetManager({
                 )}
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                {selectedNet.net_date} · {selectedNet.frequency} MHz · {selectedNet.mode}
+                {(selectedNet.starts_at ? formatJerusalemDateTime(selectedNet.starts_at) : selectedNet.net_date)} · {selectedNet.frequency} MHz · {selectedNet.mode}
               </p>
             </div>
             <div className="flex gap-2">
