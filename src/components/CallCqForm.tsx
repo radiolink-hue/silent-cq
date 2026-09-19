@@ -29,6 +29,12 @@ const empty = {
   comments: '',
 };
 
+function defaultModeForBand(band: string): string {
+  if (band === '40m' || band === '60m' || band === '80m' || band === '160m') return 'LSB';
+  if (band === '2m' || band === '70cm' || band === '23cm') return 'FM';
+  return 'USB';
+}
+
 export default function CallCqForm({
   onSubmit,
   onSuccess,
@@ -79,6 +85,11 @@ export default function CallCqForm({
       ...(catTelemetry.power && { power: catTelemetry.power }),
     }));
   }, [catConnected, catTelemetry]);
+
+  useEffect(() => {
+    const nextMode = defaultModeForBand(form.band);
+    setForm((f) => (f.mode === nextMode ? f : { ...f, mode: nextMode }));
+  }, [form.band]);
 
   const set = (k: keyof typeof empty, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
