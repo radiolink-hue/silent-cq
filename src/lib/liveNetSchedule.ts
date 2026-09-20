@@ -32,7 +32,7 @@ export const LIVE_NET_SCHEDULES: LiveNetSchedule[] = [
     frequency: '7.165',
     mode: 'LSB',
     antenna: 'Dipole',
-    power: '',
+    power: '100',
     bannerClass: 'bg-amber-400 text-amber-950',
   },
   {
@@ -48,7 +48,7 @@ export const LIVE_NET_SCHEDULES: LiveNetSchedule[] = [
     frequency: '145.775',
     mode: 'FM',
     antenna: 'Vertical',
-    power: '100',
+    power: '',
     bannerClass: 'bg-emerald-600 text-white',
   },
   {

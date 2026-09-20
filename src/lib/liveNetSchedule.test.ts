@@ -12,9 +12,9 @@ describe('live net detection (Asia/Jerusalem)', () => {
     assert.equal(getLiveNet(new Date('2026-07-15T16:16:00.000Z')), null);
   });
 
-  it('uses blank power and dipole for the roundtable', () => {
+  it('uses 100 W and dipole for the roundtable', () => {
     const net = getLiveNet(new Date('2026-01-15T16:30:00.000Z'));
-    assert.equal(net?.power, '');
+    assert.equal(net?.power, '100');
     assert.equal(net?.antenna, 'Dipole');
     assert.equal(net?.frequency, '7.165');
     assert.equal(net?.nameHe, 'השולחן העגול');
@@ -25,7 +25,7 @@ describe('live net detection (Asia/Jerusalem)', () => {
     assert.equal(net?.id, 'gal');
     assert.equal(net?.name, 'Hagal Hameshudar');
     assert.equal(net?.antenna, 'Vertical');
-    assert.equal(net?.power, '100');
+    assert.equal(net?.power, '');
     assert.equal(getLiveNet(new Date('2026-01-13T17:24:00.000Z')), null);
   });
 
