@@ -5,6 +5,7 @@ import {
   csvEscape,
   csvFileName,
   formatParticipantSignalReports,
+  groupNetsForExport,
   netMatchesExportSelection,
   uniqueCsvFileName,
 } from './netReportExport.ts';
@@ -80,5 +81,43 @@ describe('net report CSV export', () => {
     assert.ok(csv.includes('2026-09-20'));
     assert.ok(csv.includes('4X1AA'));
     assert.ok(csv.includes('4X1DA→5-9'));
+  });
+
+  it('writes rows from signal reports even when the net has no participants', () => {
+    const csv = buildNetSessionCsv(
+      { name: 'Daily Roundtable Net', net_date: '2026-09-20', starts_at: '2026-09-20T15:00:00.000Z', created_at: '' },
+      [],
+      [
+        {
+          id: '1',
+          net_id: 'n',
+          tx_callsign: '4X1DM',
+          rx_callsign: '4X1DA',
+          rst_report: '5-9+10',
+          created_at: '',
+        },
+        {
+          id: '2',
+          net_id: 'n',
+          tx_callsign: '4X1DA',
+          rx_callsign: '4X1DM',
+          rst_report: '5-9',
+          created_at: '',
+        },
+      ]
+    );
+    assert.ok(csv.includes('4X1DA'));
+    assert.ok(csv.includes('4X1DM'));
+    assert.ok(csv.includes('4X1DM→5-9'));
+    assert.ok(csv.includes('4X1DA→5-9+10'));
+  });
+
+  it('merges duplicate sessions of the same name and date into one export group', () => {
+    const groups = groupNetsForExport([
+      { id: 'empty', name: 'Daily Roundtable Net', net_date: '2026-09-20', created_at: '2026-09-20T15:00:00.000Z' },
+      { id: 'with-reports', name: 'Daily Roundtable Net', net_date: '2026-09-20', created_at: '2026-09-20T15:10:00.000Z' },
+    ]);
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0].ids.sort(), ['empty', 'with-reports']);
   });
 });

@@ -1,5 +1,6 @@
 import type { Net, NetParticipant, SignalReport } from '../types.ts';
 import { formatJerusalemTime } from './netTime.ts';
+import { normalizeNetName, pickExistingNetSession } from './netSession.ts';
 
 export const JSZIP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 
@@ -79,6 +80,57 @@ export function formatParticipantSignalReports(
     .join('; ');
 }
 
+export function stationsForNetExport(
+  participants: NetParticipant[],
+  reports: SignalReport[]
+): { callsign: string; grid: string; city: string; power: string; antenna: string }[] {
+  const byCall = new Map<
+    string,
+    { callsign: string; grid: string; city: string; power: string; antenna: string }
+  >();
+
+  const ensure = (raw: string) => {
+    const callsign = raw.trim().toUpperCase();
+    if (!callsign) return;
+    if (!byCall.has(callsign)) {
+      byCall.set(callsign, { callsign, grid: '', city: '', power: '', antenna: '' });
+    }
+  };
+
+  for (const p of participants) {
+    ensure(p.callsign);
+    const row = byCall.get(p.callsign.trim().toUpperCase());
+    if (!row) continue;
+    row.grid = p.grid ?? '';
+    row.city = p.city ?? '';
+    row.power = p.power ?? '';
+    row.antenna = p.antenna ?? '';
+  }
+
+  for (const r of reports) {
+    ensure(r.tx_callsign);
+    ensure(r.rx_callsign);
+  }
+
+  return [...byCall.values()].sort((a, b) => a.callsign.localeCompare(b.callsign));
+}
+
+export function groupNetsForExport<T extends { id: string; name: string; net_date: string; created_at?: string }>(
+  nets: T[]
+): { net: T; ids: string[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const net of nets) {
+    const key = `${net.net_date}|${normalizeNetName(net.name || net.id)}`;
+    const list = groups.get(key) ?? [];
+    list.push(net);
+    groups.set(key, list);
+  }
+  return [...groups.values()].map((list) => {
+    const net = pickExistingNetSession(list, list[0].name) ?? list[0];
+    return { net, ids: list.map((n) => n.id) };
+  });
+}
+
 export function netMatchesExportSelection(
   netName: string,
   allNets: boolean,
@@ -97,22 +149,21 @@ export function buildNetSessionCsv(
   const timeSource = net.starts_at || net.created_at;
   const time = timeSource ? formatJerusalemTime(timeSource) : '';
   const header = 'Date,Time,Callsign,Grid,City,Power,Antenna,Signal_Reports';
-  const rows = [...participants]
-    .sort((a, b) => a.callsign.localeCompare(b.callsign))
-    .map((p) =>
-      [
-        date,
-        time,
-        p.callsign,
-        p.grid ?? '',
-        p.city ?? '',
-        p.power ?? '',
-        p.antenna ?? '',
-        formatParticipantSignalReports(p.callsign, reports),
-      ]
-        .map((cell) => csvEscape(String(cell)))
-        .join(',')
-    );
+  const stations = stationsForNetExport(participants, reports);
+  const rows = stations.map((p) =>
+    [
+      date,
+      time,
+      p.callsign,
+      p.grid,
+      p.city,
+      p.power,
+      p.antenna,
+      formatParticipantSignalReports(p.callsign, reports),
+    ]
+      .map((cell) => csvEscape(String(cell)))
+      .join(',')
+  );
   return `\uFEFF${[header, ...rows].join('\r\n')}\r\n`;
 }
 
