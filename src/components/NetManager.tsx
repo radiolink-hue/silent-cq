@@ -210,14 +210,16 @@ export default function NetManager({
           {t('netManager')}
         </h2>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => onOpenExportReports?.()}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
-          >
-            <FileArchive className="h-4 w-4" />
-            {t('exportReports')}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => onOpenExportReports?.()}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
+            >
+              <FileArchive className="h-4 w-4" />
+              {t('exportReports')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowCreate((s) => !s)}
@@ -596,14 +598,6 @@ export default function NetManager({
               <p className="py-2 text-center text-sm text-slate-400">{t('exportNoNetsForDate')}</p>
             )
           )}
-          <button
-            type="button"
-            onClick={() => onOpenExportReports?.()}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700 active:scale-[0.99]"
-          >
-            <FileArchive className="h-5 w-5" />
-            {t('exportReports')}
-          </button>
           <button
             type="button"
             onClick={handleFilteredExport}

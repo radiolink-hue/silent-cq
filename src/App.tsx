@@ -30,7 +30,7 @@ import CallsignModal from '@/components/CallsignModal';
 import CatSettingsModal from '@/components/CatSettingsModal';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { getLiveNet } from '@/lib/liveNetSchedule';
-import { Calendar, FileArchive } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { jerusalemDateString } from '@/lib/netTime';
 import ExportReportsDialog from '@/components/ExportReportsDialog';
 
@@ -295,17 +295,7 @@ export default function App() {
           <TabBar active={tab} onChange={setTab} activeCount={sessions.length} isAdmin={isAdmin} />
         </div>
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2 sm:mt-6">
-          {tab === 'nets' && isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowExportReports(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
-            >
-              <FileArchive className="h-4 w-4" />
-              {t('exportReports')}
-            </button>
-          )}
+        <div className="mt-4 flex justify-end sm:mt-6">
           <button
             type="button"
             onClick={() => setShowTodaysReport(true)}
