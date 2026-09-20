@@ -10,6 +10,16 @@ import {
   planNetParticipantSync,
   shouldSyncNetSignalReport,
 } from '@/lib/cqPresence';
+import { pickExistingNetSession } from '@/lib/netSession';
+
+async function fetchExistingNet(name: string, netDate: string): Promise<Net | null> {
+  const { data, error } = await supabase
+    .from('nets')
+    .select('*')
+    .eq('net_date', netDate);
+  if (error || !data) return null;
+  return pickExistingNetSession(data as Net[], name) ?? null;
+}
 
 export function useNets() {
   const [nets, setNets] = useState<Net[]>([]);
@@ -62,6 +72,34 @@ export function useNets() {
     });
   }, []);
 
+  const fetchNetsInDateRange = useCallback(async (from: string, to: string): Promise<Net[]> => {
+    const { start } = jerusalemDateToUtcRange(from);
+    const { end } = jerusalemDateToUtcRange(to);
+    const [byDate, byStart] = await Promise.all([
+      supabase
+        .from('nets')
+        .select('*')
+        .gte('net_date', from)
+        .lte('net_date', to)
+        .order('net_date', { ascending: true }),
+      supabase
+        .from('nets')
+        .select('*')
+        .gte('starts_at', start.toISOString())
+        .lt('starts_at', end.toISOString())
+        .order('net_date', { ascending: true }),
+    ]);
+    const rows = [...(byDate.data ?? []), ...(byStart.data ?? [])] as Net[];
+    const seen = new Set<string>();
+    return rows
+      .filter((n) => {
+        if (seen.has(n.id)) return false;
+        seen.add(n.id);
+        return true;
+      })
+      .sort((a, b) => a.net_date.localeCompare(b.net_date) || a.name.localeCompare(b.name));
+  }, []);
+
   const fetchNetExportData = useCallback(
     async (netId: string): Promise<{ participants: NetParticipant[]; reports: SignalReport[] }> => {
       const [pRes, rRes] = await Promise.all([
@@ -101,13 +139,7 @@ export function useNets() {
     const { startsAt, endsAt } = getScheduleUtcWindow(schedule, utcNow);
     const netDate = utcDateString(startsAt);
 
-    const { data: existing } = await supabase
-      .from('nets')
-      .select('id')
-      .eq('net_date', netDate)
-      .ilike('name', `${schedule.name}%`)
-      .maybeSingle();
-
+    const existing = await fetchExistingNet(schedule.name, netDate);
     if (existing) return existing.id;
 
     const payload: NewNet = {
@@ -125,7 +157,14 @@ export function useNets() {
       .select()
       .maybeSingle();
 
-    if (err || !data) return null;
+    if (err) {
+      if (err.code === '23505') {
+        const raced = await fetchExistingNet(schedule.name, netDate);
+        return raced?.id ?? null;
+      }
+      return null;
+    }
+    if (!data) return null;
 
     const net = data as Net;
     setNets((prev) => [net, ...prev]);
@@ -155,6 +194,11 @@ export function useNets() {
 
     if (plan.toRemoveIds.length > 0) {
       await supabase.from('net_participants').delete().in('id', plan.toRemoveIds);
+    }
+
+    for (const row of plan.toUpdate) {
+      const { id, ...fields } = row;
+      await supabase.from('net_participants').update(fields).eq('id', id);
     }
 
     if (plan.toInsert.length > 0) {
@@ -328,12 +372,29 @@ export function useNets() {
       };
     }
 
+    const adopt = (net: Net) => {
+      setNets((prev) => (prev.some((n) => n.id === net.id) ? prev : [net, ...prev]));
+      setSelectedNetId(net.id);
+      return { error: false, net };
+    };
+
+    const existing = await fetchExistingNet(insertPayload.name, insertPayload.net_date);
+    if (existing) return adopt(existing);
+
     const { data, error: err } = await supabase
       .from('nets')
       .insert(insertPayload)
       .select()
       .maybeSingle();
-    if (err || !data) return { error: true };
+    if (err) {
+      if (err.code === '23505') {
+        const raced = await fetchExistingNet(insertPayload.name, insertPayload.net_date);
+        if (!raced) return { error: true };
+        return adopt(raced);
+      }
+      return { error: true };
+    }
+    if (!data) return { error: true };
     const net = data as Net;
     setNets((prev) => [net, ...prev]);
     setSelectedNetId(net.id);
@@ -342,9 +403,50 @@ export function useNets() {
 
   const addParticipant = useCallback(
     async (netId: string, payload: NewNetParticipant): Promise<{ error: boolean; exists?: boolean }> => {
+      const callsign = payload.callsign.trim().toUpperCase();
+      const fields = {
+        callsign,
+        grid: payload.grid ?? '',
+        city: payload.city ?? '',
+        antenna: payload.antenna ?? '',
+        power: payload.power ?? '',
+      };
+
+      const { data: existing, error: existingErr } = await supabase
+        .from('net_participants')
+        .select('id, callsign')
+        .eq('net_id', netId);
+      if (existingErr) return { error: true };
+
+      const matches = (existing ?? []).filter(
+        (p) => p.callsign.trim().toUpperCase() === callsign
+      );
+
+      if (matches.length > 0) {
+        const keepId = matches[0].id;
+        const extraIds = matches.slice(1).map((p) => p.id);
+        const { data, error: err } = await supabase
+          .from('net_participants')
+          .update(fields)
+          .eq('id', keepId)
+          .select()
+          .maybeSingle();
+        if (err || !data) return { error: true };
+        if (extraIds.length > 0) {
+          await supabase.from('net_participants').delete().in('id', extraIds);
+        }
+        setParticipants((prev) =>
+          prev
+            .filter((p) => p.id === keepId || !extraIds.includes(p.id))
+            .map((p) => (p.id === keepId ? (data as NetParticipant) : p))
+            .sort((a, b) => a.callsign.localeCompare(b.callsign))
+        );
+        return { error: false };
+      }
+
       const { data, error: err } = await supabase
         .from('net_participants')
-        .insert({ ...payload, net_id: netId })
+        .insert({ ...fields, net_id: netId })
         .select()
         .maybeSingle();
       if (err) {
@@ -353,11 +455,9 @@ export function useNets() {
       }
       if (data) {
         setParticipants((prev) =>
-          prev.some((p) => p.callsign.toUpperCase() === payload.callsign.toUpperCase())
-            ? prev
-            : [...prev, data as NetParticipant].sort((a, b) =>
-                a.callsign.localeCompare(b.callsign)
-              )
+          [...prev, data as NetParticipant].sort((a, b) =>
+            a.callsign.localeCompare(b.callsign)
+          )
         );
       }
       return { error: false };
@@ -429,6 +529,7 @@ export function useNets() {
     deleteParticipant,
     deleteReport,
     fetchNetsByDate,
+    fetchNetsInDateRange,
     fetchNetExportData,
     reload: loadNets,
   };

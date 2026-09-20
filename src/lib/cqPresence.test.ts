@@ -93,7 +93,51 @@ describe('planNetParticipantSync', () => {
       plan.toInsert.map((row) => row.callsign),
       ['4X1CQ']
     );
+    assert.deepEqual(plan.toUpdate, []);
     assert.deepEqual(plan.toRemoveIds.sort(), ['p-gone', 'p-login'].sort());
+  });
+
+  it('updates an existing check-in with the latest CQ data instead of inserting a duplicate', () => {
+    const live = session({
+      callsign: '4x1aa',
+      gridsquare: 'KM73',
+      city: 'Eilat',
+      antenna: 'Yagi',
+      power: '400',
+    });
+    const plan = planNetParticipantSync(
+      'net-1',
+      [live],
+      [{ id: 'p-old', callsign: '4X1AA' }],
+      now
+    );
+
+    assert.deepEqual(plan.toInsert, []);
+    assert.deepEqual(plan.toRemoveIds, []);
+    assert.equal(plan.toUpdate.length, 1);
+    assert.equal(plan.toUpdate[0].id, 'p-old');
+    assert.equal(plan.toUpdate[0].callsign, '4X1AA');
+    assert.equal(plan.toUpdate[0].grid, 'KM73');
+    assert.equal(plan.toUpdate[0].city, 'Eilat');
+    assert.equal(plan.toUpdate[0].antenna, 'Yagi');
+    assert.equal(plan.toUpdate[0].power, '400');
+  });
+
+  it('keeps one row and drops extras when the same callsign is already listed twice', () => {
+    const live = session({ callsign: '4X1AA', city: 'Haifa' });
+    const plan = planNetParticipantSync(
+      'net-1',
+      [live],
+      [
+        { id: 'p-a', callsign: '4x1aa' },
+        { id: 'p-b', callsign: '4X1AA' },
+      ],
+      now
+    );
+
+    assert.deepEqual(plan.toInsert, []);
+    assert.equal(plan.toUpdate[0].id, 'p-a');
+    assert.deepEqual(plan.toRemoveIds, ['p-b']);
   });
 });
 

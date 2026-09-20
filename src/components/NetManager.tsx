@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Network, Plus, Trash2, Download, FileDown, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X } from 'lucide-react';
+import { Network, Plus, Trash2, Download, FileDown, FileArchive, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X } from 'lucide-react';
 import { BANDS, MODES, Net, NetParticipant, NewNet, NewNetParticipant, NewSignalReport, SignalReport } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
@@ -27,6 +27,7 @@ interface NetManagerProps {
   fetchNetExportData: (netId: string) => Promise<{ participants: NetParticipant[]; reports: SignalReport[] }>;
   isAdmin?: boolean;
   onToast: (title: string, message: string, isError?: boolean) => void;
+  onOpenExportReports?: () => void;
 }
 
 const emptyNet: NewNet = {
@@ -68,6 +69,7 @@ export default function NetManager({
   fetchNetExportData,
   isAdmin,
   onToast,
+  onOpenExportReports,
 }: NetManagerProps) {
   const { t } = useApp();
   const utcNow = useServerUtcNow();
@@ -207,14 +209,24 @@ export default function NetManager({
           <Network className="h-5 w-5 text-brand-500" />
           {t('netManager')}
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowCreate((s) => !s)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-95"
-        >
-          {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showCreate ? t('cancel') : t('netCreateTitle')}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenExportReports?.()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
+          >
+            <FileArchive className="h-4 w-4" />
+            {t('exportReports')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreate((s) => !s)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-95"
+          >
+            {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showCreate ? t('cancel') : t('netCreateTitle')}
+          </button>
+        </div>
       </div>
 
       {/* Create Net form */}
@@ -584,6 +596,14 @@ export default function NetManager({
               <p className="py-2 text-center text-sm text-slate-400">{t('exportNoNetsForDate')}</p>
             )
           )}
+          <button
+            type="button"
+            onClick={() => onOpenExportReports?.()}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700 active:scale-[0.99]"
+          >
+            <FileArchive className="h-5 w-5" />
+            {t('exportReports')}
+          </button>
           <button
             type="button"
             onClick={handleFilteredExport}
