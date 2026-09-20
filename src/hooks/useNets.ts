@@ -10,6 +10,16 @@ import {
   planNetParticipantSync,
   shouldSyncNetSignalReport,
 } from '@/lib/cqPresence';
+import { pickExistingNetSession } from '@/lib/netSession';
+
+async function fetchExistingNet(name: string, netDate: string): Promise<Net | null> {
+  const { data, error } = await supabase
+    .from('nets')
+    .select('*')
+    .eq('net_date', netDate);
+  if (error || !data) return null;
+  return pickExistingNetSession(data as Net[], name) ?? null;
+}
 
 export function useNets() {
   const [nets, setNets] = useState<Net[]>([]);
@@ -101,13 +111,7 @@ export function useNets() {
     const { startsAt, endsAt } = getScheduleUtcWindow(schedule, utcNow);
     const netDate = utcDateString(startsAt);
 
-    const { data: existing } = await supabase
-      .from('nets')
-      .select('id')
-      .eq('net_date', netDate)
-      .ilike('name', `${schedule.name}%`)
-      .maybeSingle();
-
+    const existing = await fetchExistingNet(schedule.name, netDate);
     if (existing) return existing.id;
 
     const payload: NewNet = {
@@ -125,7 +129,14 @@ export function useNets() {
       .select()
       .maybeSingle();
 
-    if (err || !data) return null;
+    if (err) {
+      if (err.code === '23505') {
+        const raced = await fetchExistingNet(schedule.name, netDate);
+        return raced?.id ?? null;
+      }
+      return null;
+    }
+    if (!data) return null;
 
     const net = data as Net;
     setNets((prev) => [net, ...prev]);
@@ -333,12 +344,29 @@ export function useNets() {
       };
     }
 
+    const adopt = (net: Net) => {
+      setNets((prev) => (prev.some((n) => n.id === net.id) ? prev : [net, ...prev]));
+      setSelectedNetId(net.id);
+      return { error: false, net };
+    };
+
+    const existing = await fetchExistingNet(insertPayload.name, insertPayload.net_date);
+    if (existing) return adopt(existing);
+
     const { data, error: err } = await supabase
       .from('nets')
       .insert(insertPayload)
       .select()
       .maybeSingle();
-    if (err || !data) return { error: true };
+    if (err) {
+      if (err.code === '23505') {
+        const raced = await fetchExistingNet(insertPayload.name, insertPayload.net_date);
+        if (!raced) return { error: true };
+        return adopt(raced);
+      }
+      return { error: true };
+    }
+    if (!data) return { error: true };
     const net = data as Net;
     setNets((prev) => [net, ...prev]);
     setSelectedNetId(net.id);
