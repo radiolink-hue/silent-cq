@@ -79,6 +79,41 @@ export function formatParticipantSignalReports(
     .join('; ');
 }
 
+export function stationsForNetExport(
+  participants: NetParticipant[],
+  reports: SignalReport[]
+): { callsign: string; grid: string; city: string; power: string; antenna: string }[] {
+  const byCall = new Map<
+    string,
+    { callsign: string; grid: string; city: string; power: string; antenna: string }
+  >();
+
+  const ensure = (raw: string) => {
+    const callsign = raw.trim().toUpperCase();
+    if (!callsign) return;
+    if (!byCall.has(callsign)) {
+      byCall.set(callsign, { callsign, grid: '', city: '', power: '', antenna: '' });
+    }
+  };
+
+  for (const p of participants) {
+    ensure(p.callsign);
+    const row = byCall.get(p.callsign.trim().toUpperCase());
+    if (!row) continue;
+    row.grid = p.grid ?? '';
+    row.city = p.city ?? '';
+    row.power = p.power ?? '';
+    row.antenna = p.antenna ?? '';
+  }
+
+  for (const r of reports) {
+    ensure(r.tx_callsign);
+    ensure(r.rx_callsign);
+  }
+
+  return [...byCall.values()].sort((a, b) => a.callsign.localeCompare(b.callsign));
+}
+
 export function netMatchesExportSelection(
   netName: string,
   allNets: boolean,
@@ -97,22 +132,21 @@ export function buildNetSessionCsv(
   const timeSource = net.starts_at || net.created_at;
   const time = timeSource ? formatJerusalemTime(timeSource) : '';
   const header = 'Date,Time,Callsign,Grid,City,Power,Antenna,Signal_Reports';
-  const rows = [...participants]
-    .sort((a, b) => a.callsign.localeCompare(b.callsign))
-    .map((p) =>
-      [
-        date,
-        time,
-        p.callsign,
-        p.grid ?? '',
-        p.city ?? '',
-        p.power ?? '',
-        p.antenna ?? '',
-        formatParticipantSignalReports(p.callsign, reports),
-      ]
-        .map((cell) => csvEscape(String(cell)))
-        .join(',')
-    );
+  const stations = stationsForNetExport(participants, reports);
+  const rows = stations.map((p) =>
+    [
+      date,
+      time,
+      p.callsign,
+      p.grid,
+      p.city,
+      p.power,
+      p.antenna,
+      formatParticipantSignalReports(p.callsign, reports),
+    ]
+      .map((cell) => csvEscape(String(cell)))
+      .join(',')
+  );
   return `\uFEFF${[header, ...rows].join('\r\n')}\r\n`;
 }
 

@@ -81,4 +81,33 @@ describe('net report CSV export', () => {
     assert.ok(csv.includes('4X1AA'));
     assert.ok(csv.includes('4X1DA→5-9'));
   });
+
+  it('writes rows from signal reports even when the net has no participants', () => {
+    const csv = buildNetSessionCsv(
+      { name: 'Daily Roundtable Net', net_date: '2026-09-20', starts_at: '2026-09-20T15:00:00.000Z', created_at: '' },
+      [],
+      [
+        {
+          id: '1',
+          net_id: 'n',
+          tx_callsign: '4X1DM',
+          rx_callsign: '4X1DA',
+          rst_report: '5-9+10',
+          created_at: '',
+        },
+        {
+          id: '2',
+          net_id: 'n',
+          tx_callsign: '4X1DA',
+          rx_callsign: '4X1DM',
+          rst_report: '5-9',
+          created_at: '',
+        },
+      ]
+    );
+    assert.ok(csv.includes('4X1DA'));
+    assert.ok(csv.includes('4X1DM'));
+    assert.ok(csv.includes('4X1DM→5-9'));
+    assert.ok(csv.includes('4X1DA→5-9+10'));
+  });
 });
