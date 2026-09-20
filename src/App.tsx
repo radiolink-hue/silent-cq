@@ -6,8 +6,10 @@ import {
   isProfileComplete,
   loadOperatorProfile,
   needsCityPrompt,
+  parseOperatorPower,
   saveOperatorProfile,
 } from '@/lib/operatorProfile';
+import { fetchOperatorPower, persistOperatorPower } from '@/lib/operatorProfileSync';
 import { useApp } from '@/context/AppContext';
 import { useSessions } from '@/hooks/useSessions';
 import { useNets } from '@/hooks/useNets';
@@ -55,6 +57,7 @@ export default function App() {
   const [myCallsign, setMyCallsignState] = useState(savedProfile.callsign);
   const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
   const [myCity, setMyCityState] = useState(savedProfile.city);
+  const [myPower, setMyPowerState] = useState(savedProfile.power);
   const [myPos, setMyPosState] = useState<{ lat: number; lng: number } | null>(() => {
     const raw = localStorage.getItem('scq_pos');
     if (raw) {
@@ -120,11 +123,13 @@ export default function App() {
     localStorage.setItem('scq_pos', JSON.stringify(p));
   };
 
-  const handleLogin = (callsign: string, gridsquare: string, city: string, connectRadio: boolean) => {
+  const handleLogin = (callsign: string, gridsquare: string, city: string, power: number, connectRadio: boolean) => {
     setMyCallsignState(callsign);
     setMyGridsquareState(gridsquare);
     setMyCityState(city);
-    saveOperatorProfile({ callsign, gridsquare, city });
+    setMyPowerState(power);
+    saveOperatorProfile({ callsign, gridsquare, city, power });
+    void persistOperatorPower(callsign, power);
     const coords = gridToLatLng(gridsquare);
     if (coords) setMyPos(coords);
     if (connectRadio) {
@@ -133,6 +138,24 @@ export default function App() {
   };
 
   const dismissToast = (id: string) => setToasts((prev) => prev.filter((x) => x.id !== id));
+
+  useEffect(() => {
+    const profile = loadOperatorProfile();
+    if (!isProfileComplete(profile)) return;
+    let cancelled = false;
+    fetchOperatorPower(profile.callsign).then((power) => {
+      if (cancelled) return;
+      if (power == null) {
+        void persistOperatorPower(profile.callsign, profile.power);
+        return;
+      }
+      setMyPowerState(power);
+      saveOperatorProfile({ power });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -172,6 +195,13 @@ export default function App() {
     if (payload.city.trim()) {
       setMyCityState(payload.city.trim());
       saveOperatorProfile({ city: payload.city.trim() });
+    }
+    const parsedPower =
+      parseOperatorPower(payload.power) ?? parseOperatorPower(parseInt(payload.power, 10));
+    if (parsedPower != null) {
+      setMyPowerState(parsedPower);
+      saveOperatorProfile({ power: parsedPower });
+      void persistOperatorPower(myCallsign, parsedPower);
     }
     if (payload.gridsquare.trim()) {
       const grid = payload.gridsquare.trim().toUpperCase();
@@ -220,7 +250,7 @@ export default function App() {
     (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase()
   );
 
-  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity };
+  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity, power: myPower };
   if (!isProfileComplete(profile)) {
     return (
       <LoginScreen
@@ -228,6 +258,7 @@ export default function App() {
         initialCallsign={myCallsign}
         initialGridsquare={myGridsquare}
         initialCity={myCity}
+        initialPower={myPower}
         cityOnly={needsCityPrompt(profile)}
       />
     );
@@ -288,6 +319,7 @@ export default function App() {
               myCallsign={myCallsign}
               myGridsquare={myGridsquare}
               myCity={myCity}
+              myPower={String(myPower)}
               catTelemetry={cat.telemetry}
               catConnected={cat.connected}
               vfoMoving={cat.vfoMoving}

@@ -47,6 +47,13 @@ export const MODES = [
   'VARAC', 'SATELLITE', 'DIGITAL VOICE',
 ] as const;
 
+/** Conventional voice mode for a band; the operator can still override the dropdown. */
+export function defaultModeForBand(band: string): string {
+  if (band === '40m' || band === '60m' || band === '80m' || band === '160m') return 'LSB';
+  if (band === '2m' || band === '70cm' || band === '23cm') return 'FM';
+  return 'USB';
+}
+
 export const ANTENNAS = [
   'Dipole', 'End-Fed', 'Yagi', 'Mobile', 'Delta-Loop', 'Vertical', 'Other',
 ] as const;

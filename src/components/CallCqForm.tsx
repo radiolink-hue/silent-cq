@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Radio, Loader2, Send, Info, RadioTower, Activity } from 'lucide-react';
-import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession } from '@/types';
+import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession, defaultModeForBand } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { gridToLatLng } from '@/lib/maidenhead';
 import { getActiveNet, type NetSchedule } from '@/lib/nets';
@@ -13,26 +13,27 @@ interface CallCqFormProps {
   myCallsign: string;
   myGridsquare: string;
   myCity: string;
+  myPower: string;
   catTelemetry: CatTelemetry | null;
   catConnected: boolean;
   vfoMoving: boolean;
   settlingSeconds: number;
 }
 
-const empty = {
-  band: '20m',
-  mode: 'USB',
-  frequency: '',
-  power: '',
+const emptyDefaults = {
+  band: '40m',
+  mode: 'LSB',
+  frequency: '7.165',
   antenna: 'Dipole',
-  city: '',
   comments: '',
 };
 
-function defaultModeForBand(band: string): string {
-  if (band === '40m' || band === '60m' || band === '80m' || band === '160m') return 'LSB';
-  if (band === '2m' || band === '70cm' || band === '23cm') return 'FM';
-  return 'USB';
+function emptyForm(power: string, city: string) {
+  return {
+    ...emptyDefaults,
+    power,
+    city,
+  };
 }
 
 export default function CallCqForm({
@@ -41,6 +42,7 @@ export default function CallCqForm({
   myCallsign,
   myGridsquare,
   myCity,
+  myPower,
   catTelemetry,
   catConnected,
   vfoMoving,
@@ -48,7 +50,7 @@ export default function CallCqForm({
 }: CallCqFormProps) {
   const { t } = useApp();
   const utcNow = useServerUtcNow();
-  const [form, setForm] = useState({ ...empty, city: myCity });
+  const [form, setForm] = useState(() => emptyForm(myPower, myCity));
   const [gridsquare, setGridsquare] = useState(myGridsquare);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -58,6 +60,11 @@ export default function CallCqForm({
     setGridsquare(myGridsquare);
     setForm((f) => ({ ...f, city: f.city || myCity }));
   }, [myGridsquare, myCity]);
+
+  useEffect(() => {
+    if (!myPower) return;
+    setForm((f) => (f.power === myPower ? f : { ...f, power: myPower }));
+  }, [myPower]);
 
   useEffect(() => {
     if (!utcNow) return;
@@ -91,7 +98,7 @@ export default function CallCqForm({
     setForm((f) => (f.mode === nextMode ? f : { ...f, mode: nextMode }));
   }, [form.band]);
 
-  const set = (k: keyof typeof empty, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof ReturnType<typeof emptyForm>, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const validateFreq = (freq: string, band: string): boolean => {
     const f = parseFloat(freq);
@@ -104,7 +111,7 @@ export default function CallCqForm({
   const validatePower = (power: string): boolean => {
     const p = parseInt(power, 10);
     if (isNaN(p)) return false;
-    return p >= 1 && p <= 1000;
+    return p >= 1 && p <= 1500;
   };
 
   const doSubmit = async (payload: NewCqSession): Promise<boolean> => {
@@ -145,7 +152,7 @@ export default function CallCqForm({
     const ok = await doSubmit(payload);
     setSubmitting(false);
     if (ok) {
-      setForm({ ...empty, city: payload.city.trim() || myCity });
+      setForm(emptyForm(myPower, payload.city.trim() || myCity));
       setGridsquare(payload.gridsquare.trim().toUpperCase() || myGridsquare);
       onSuccess();
     }
@@ -214,7 +221,15 @@ export default function CallCqForm({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={label} htmlFor="band">{t('band')}</label>
-              <select id="band" value={form.band} onChange={(e) => set('band', e.target.value)} className={field}>
+              <select
+                id="band"
+                value={form.band}
+                onChange={(e) => {
+                  const band = e.target.value;
+                  setForm((f) => ({ ...f, band, mode: defaultModeForBand(band) }));
+                }}
+                className={field}
+              >
                 {BANDS.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
