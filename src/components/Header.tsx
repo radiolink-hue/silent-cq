@@ -3,6 +3,8 @@ import { Radio, Sun, Moon, Share2, MessageCircle, Send, Link2, Check, Bell, Bell
 import { useApp } from '@/context/AppContext';
 import Toggle from '@/components/Toggle';
 import type { AllmonStatus } from '@/hooks/useAllstarMonitor';
+import type { LiveNetSchedule } from '@/lib/liveNetSchedule';
+import ActiveNetBanner from '@/components/ActiveNetBanner';
 
 interface HeaderProps {
   notifPermission: NotificationPermission;
@@ -12,9 +14,10 @@ interface HeaderProps {
   catConnected: boolean;
   catFrequency?: string;
   onOpenCatSettings: () => void;
+  liveNet: LiveNetSchedule | null;
 }
 
-export default function Header({ notifPermission, onEnableNotifications, connectedCallsigns, allmonStatus, catConnected, catFrequency, onOpenCatSettings }: HeaderProps) {
+export default function Header({ notifPermission, onEnableNotifications, connectedCallsigns, allmonStatus, catConnected, catFrequency, onOpenCatSettings, liveNet }: HeaderProps) {
   const { t, lang, toggleLang, theme, toggleTheme } = useApp();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -204,6 +207,7 @@ export default function Header({ notifPermission, onEnableNotifications, connect
           </div>
         </div>
       </div>
+      <ActiveNetBanner net={liveNet} />
     </header>
   );
 }

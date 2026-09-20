@@ -170,6 +170,7 @@ const dict: Dict = {
   qrzName: { he: 'שם', en: 'Name' },
   qrzViewFull: { he: 'צפה בפרופיל מלא ב-QRZ', en: 'View Full Profile on QRZ' },
   qrzLookupPartial: { he: 'חלק מהנתונים אינם זמינים', en: 'Some data unavailable' },
+  noActiveNet: { he: 'אין רשת פעילה', en: 'No Active Net' },
   netDetected: { he: 'רשת פעילה זוהתה', en: 'Active Net Detected' },
   netDetectedDesc: { he: 'הטופס הותאם אוטומטית לרשת הפעילה', en: 'Form auto-configured for active net' },
   fmNetNoReports: { he: 'רשת FM - דוחות אות אינם זמינים', en: 'FM Net - Signal reports not available' },

@@ -3,8 +3,7 @@ import { Radio, Loader2, Send, Info, RadioTower, Activity } from 'lucide-react';
 import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession, defaultModeForBand } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { gridToLatLng } from '@/lib/maidenhead';
-import { getActiveNet, type NetSchedule } from '@/lib/nets';
-import { useServerUtcNow } from '@/hooks/useServerUtcNow';
+import type { LiveNetSchedule } from '@/lib/liveNetSchedule';
 import type { CatTelemetry } from '@/hooks/useCatControl';
 
 interface CallCqFormProps {
@@ -14,6 +13,7 @@ interface CallCqFormProps {
   myGridsquare: string;
   myCity: string;
   myPower: string;
+  liveNet: LiveNetSchedule | null;
   catTelemetry: CatTelemetry | null;
   catConnected: boolean;
   vfoMoving: boolean;
@@ -43,18 +43,17 @@ export default function CallCqForm({
   myGridsquare,
   myCity,
   myPower,
+  liveNet,
   catTelemetry,
   catConnected,
   vfoMoving,
   settlingSeconds,
 }: CallCqFormProps) {
   const { t } = useApp();
-  const utcNow = useServerUtcNow();
   const [form, setForm] = useState(() => emptyForm(myPower, myCity));
   const [gridsquare, setGridsquare] = useState(myGridsquare);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [activeNet, setActiveNet] = useState<NetSchedule | null>(null);
 
   useEffect(() => {
     setGridsquare(myGridsquare);
@@ -62,25 +61,22 @@ export default function CallCqForm({
   }, [myGridsquare, myCity]);
 
   useEffect(() => {
+    if (liveNet) return;
     if (!myPower) return;
     setForm((f) => (f.power === myPower ? f : { ...f, power: myPower }));
-  }, [myPower]);
+  }, [myPower, liveNet]);
 
   useEffect(() => {
-    if (!utcNow) return;
-    const net = getActiveNet(utcNow);
-    setActiveNet(net);
-    if (net) {
-      setForm((f) => ({
-        ...f,
-        band: net.band,
-        mode: net.mode,
-        frequency: net.frequency,
-        power: net.power,
-        antenna: net.id === 'allstar' ? 'Vertical' : f.antenna,
-      }));
-    }
-  }, [utcNow]);
+    if (!liveNet) return;
+    setForm((f) => ({
+      ...f,
+      band: liveNet.band,
+      mode: liveNet.mode,
+      frequency: liveNet.frequency,
+      power: liveNet.power,
+      antenna: liveNet.antenna,
+    }));
+  }, [liveNet]);
 
   useEffect(() => {
     if (!catConnected || !catTelemetry) return;
@@ -173,12 +169,12 @@ export default function CallCqForm({
           <h2 className="text-xl font-bold">{t('formTitle')}</h2>
         </div>
 
-        {activeNet && (
+        {liveNet && (
           <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-brand-500/10 px-3.5 py-2.5">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
             <div>
               <p className="text-sm font-bold text-brand-700 dark:text-brand-300">
-                {t('netDetected')}: {t('lang') === 'he' ? activeNet.nameHe : activeNet.name}
+                {t('netDetected')}: {t('lang') === 'he' ? liveNet.nameHe : liveNet.name}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('netDetectedDesc')}</p>
             </div>

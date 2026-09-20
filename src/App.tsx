@@ -28,6 +28,8 @@ import LoginScreen from '@/components/LoginScreen';
 import TodaysReport from '@/components/TodaysReport';
 import CallsignModal from '@/components/CallsignModal';
 import CatSettingsModal from '@/components/CatSettingsModal';
+import { useServerUtcNow } from '@/hooks/useServerUtcNow';
+import { getLiveNet } from '@/lib/liveNetSchedule';
 import { Calendar } from 'lucide-react';
 
 export default function App() {
@@ -112,6 +114,8 @@ export default function App() {
   }, [myCallsign]);
 
   const cat = useCatControl(myCallsign, handleCatSettled, handleVfoMove);
+  const utcNow = useServerUtcNow();
+  const liveNet = utcNow ? getLiveNet(utcNow) : null;
 
   const myCallsignRef = useRef(myCallsign);
   myCallsignRef.current = myCallsign;
@@ -276,6 +280,7 @@ export default function App() {
         catConnected={cat.connected}
         catFrequency={cat.telemetry?.frequency}
         onOpenCatSettings={() => setShowCatSettings(true)}
+        liveNet={liveNet}
       />
 
       <main className="mx-auto max-w-6xl px-4">
@@ -320,6 +325,7 @@ export default function App() {
               myGridsquare={myGridsquare}
               myCity={myCity}
               myPower={String(myPower)}
+              liveNet={liveNet}
               catTelemetry={cat.telemetry}
               catConnected={cat.connected}
               vfoMoving={cat.vfoMoving}
