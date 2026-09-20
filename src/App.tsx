@@ -30,7 +30,9 @@ import CallsignModal from '@/components/CallsignModal';
 import CatSettingsModal from '@/components/CatSettingsModal';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { getLiveNet } from '@/lib/liveNetSchedule';
-import { Calendar } from 'lucide-react';
+import { Calendar, FileArchive } from 'lucide-react';
+import { jerusalemDateString } from '@/lib/netTime';
+import ExportReportsDialog from '@/components/ExportReportsDialog';
 
 export default function App() {
   const { t, lang } = useApp();
@@ -53,6 +55,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CqSession | null>(null);
   const [showTodaysReport, setShowTodaysReport] = useState(false);
+  const [showExportReports, setShowExportReports] = useState(false);
   const [showCatSettings, setShowCatSettings] = useState(false);
 
   const savedProfile = loadOperatorProfile();
@@ -250,6 +253,10 @@ export default function App() {
   };
 
   const isAdmin = myCallsign.toUpperCase() === '4X1DA';
+  const today = utcNow ? jerusalemDateString(utcNow) : '';
+  const minDate = utcNow
+    ? jerusalemDateString(new Date(utcNow.getTime() - 30 * 24 * 60 * 60 * 1000))
+    : '';
   const hasActiveCQ = sessions.some(
     (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase()
   );
@@ -288,7 +295,17 @@ export default function App() {
           <TabBar active={tab} onChange={setTab} activeCount={sessions.length} isAdmin={isAdmin} />
         </div>
 
-        <div className="mt-4 flex justify-end sm:mt-6">
+        <div className="mt-4 flex flex-wrap justify-end gap-2 sm:mt-6">
+          {tab === 'nets' && isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowExportReports(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
+            >
+              <FileArchive className="h-4 w-4" />
+              {t('exportReports')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowTodaysReport(true)}
@@ -348,7 +365,6 @@ export default function App() {
               onDeleteParticipant={nets.deleteParticipant}
               onDeleteReport={nets.deleteReport}
               fetchNetsByDate={nets.fetchNetsByDate}
-              fetchNetsInDateRange={nets.fetchNetsInDateRange}
               fetchNetExportData={nets.fetchNetExportData}
               isAdmin={isAdmin}
               onToast={(title, message) =>
@@ -359,6 +375,7 @@ export default function App() {
                   message,
                 })
               }
+              onOpenExportReports={() => setShowExportReports(true)}
             />
           )}
         </div>
@@ -377,6 +394,22 @@ export default function App() {
         cancelLabel={t('cancel')}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+      <ExportReportsDialog
+        open={showExportReports}
+        today={today}
+        minDate={minDate}
+        onClose={() => setShowExportReports(false)}
+        fetchNetsInDateRange={nets.fetchNetsInDateRange}
+        fetchNetExportData={nets.fetchNetExportData}
+        onToast={(title, message) =>
+          pushToast({
+            id: `net-export-${Date.now()}`,
+            kind: 'new_cq',
+            title,
+            message,
+          })
+        }
       />
       <TodaysReport
         open={showTodaysReport}

@@ -4,7 +4,6 @@ import { BANDS, MODES, Net, NetParticipant, NewNet, NewNetParticipant, NewSignal
 import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import ExportReportsDialog from '@/components/ExportReportsDialog';
 import CallsignLink from '@/components/CallsignLink';
 import { getActiveNet } from '@/lib/nets';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
@@ -25,10 +24,10 @@ interface NetManagerProps {
   onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onDeleteReport: (reportId: string) => Promise<boolean>;
   fetchNetsByDate: (date: string) => Promise<Net[]>;
-  fetchNetsInDateRange: (from: string, to: string) => Promise<Net[]>;
   fetchNetExportData: (netId: string) => Promise<{ participants: NetParticipant[]; reports: SignalReport[] }>;
   isAdmin?: boolean;
   onToast: (title: string, message: string, isError?: boolean) => void;
+  onOpenExportReports?: () => void;
 }
 
 const emptyNet: NewNet = {
@@ -67,10 +66,10 @@ export default function NetManager({
   onDeleteParticipant,
   onDeleteReport,
   fetchNetsByDate,
-  fetchNetsInDateRange,
   fetchNetExportData,
   isAdmin,
   onToast,
+  onOpenExportReports,
 }: NetManagerProps) {
   const { t } = useApp();
   const utcNow = useServerUtcNow();
@@ -92,7 +91,6 @@ export default function NetManager({
   const [exportNetId, setExportNetId] = useState('');
   const [exporting, setExporting] = useState(false);
   const [loadingDateNets, setLoadingDateNets] = useState(false);
-  const [showExportReports, setShowExportReports] = useState(false);
 
   const selectedNet = nets.find((n) => n.id === selectedNetId) ?? null;
   const isHFNet = selectedNet ? !['FM', 'FT8', 'FT4', 'VARAC', 'SATELLITE', 'DIGITAL VOICE'].includes(selectedNet.mode) : true;
@@ -211,17 +209,15 @@ export default function NetManager({
           <Network className="h-5 w-5 text-brand-500" />
           {t('netManager')}
         </h2>
-        <div className="flex shrink-0 items-center gap-2">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowExportReports(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
-            >
-              <FileArchive className="h-4 w-4" />
-              {t('exportReports')}
-            </button>
-          )}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenExportReports?.()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
+          >
+            <FileArchive className="h-4 w-4" />
+            {t('exportReports')}
+          </button>
           <button
             type="button"
             onClick={() => setShowCreate((s) => !s)}
@@ -602,6 +598,14 @@ export default function NetManager({
           )}
           <button
             type="button"
+            onClick={() => onOpenExportReports?.()}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700 active:scale-[0.99]"
+          >
+            <FileArchive className="h-5 w-5" />
+            {t('exportReports')}
+          </button>
+          <button
+            type="button"
             onClick={handleFilteredExport}
             disabled={!exportNetId || exporting}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-50"
@@ -612,15 +616,6 @@ export default function NetManager({
         </div>
       </div>
 
-      <ExportReportsDialog
-        open={showExportReports}
-        today={today}
-        minDate={minDate}
-        onClose={() => setShowExportReports(false)}
-        fetchNetsInDateRange={fetchNetsInDateRange}
-        fetchNetExportData={fetchNetExportData}
-        onToast={onToast}
-      />
       <ConfirmDialog
         open={!!pendingNetDelete}
         title={t('netDelete')}
