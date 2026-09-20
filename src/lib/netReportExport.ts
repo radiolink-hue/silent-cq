@@ -1,5 +1,6 @@
 import type { Net, NetParticipant, SignalReport } from '../types.ts';
 import { formatJerusalemTime } from './netTime.ts';
+import { normalizeNetName, pickExistingNetSession } from './netSession.ts';
 
 export const JSZIP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 
@@ -112,6 +113,22 @@ export function stationsForNetExport(
   }
 
   return [...byCall.values()].sort((a, b) => a.callsign.localeCompare(b.callsign));
+}
+
+export function groupNetsForExport<T extends { id: string; name: string; net_date: string; created_at?: string }>(
+  nets: T[]
+): { net: T; ids: string[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const net of nets) {
+    const key = `${net.net_date}|${normalizeNetName(net.name || net.id)}`;
+    const list = groups.get(key) ?? [];
+    list.push(net);
+    groups.set(key, list);
+  }
+  return [...groups.values()].map((list) => {
+    const net = pickExistingNetSession(list, list[0].name) ?? list[0];
+    return { net, ids: list.map((n) => n.id) };
+  });
 }
 
 export function netMatchesExportSelection(

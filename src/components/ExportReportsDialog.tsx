@@ -11,6 +11,7 @@ import {
   netMatchesExportSelection,
   uniqueCsvFileName,
   zipDownloadName,
+  groupNetsForExport,
 } from '@/lib/netReportExport';
 
 interface ExportReportsDialogProps {
@@ -86,10 +87,12 @@ export default function ExportReportsDialog({
       const JSZip = await loadJSZip();
       const zip = new JSZip();
       const used = new Set<string>();
-      for (const net of chosen) {
-        const { participants, reports } = await fetchNetExportData(net.id);
-        const csv = buildNetSessionCsv(net, participants, reports);
-        zip.file(uniqueCsvFileName(net.name || net.frequency, net.net_date, used), csv);
+      for (const group of groupNetsForExport(chosen)) {
+        const chunks = await Promise.all(group.ids.map((id) => fetchNetExportData(id)));
+        const participants = chunks.flatMap((c) => c.participants);
+        const reports = chunks.flatMap((c) => c.reports);
+        const csv = buildNetSessionCsv(group.net, participants, reports);
+        zip.file(uniqueCsvFileName(group.net.name || group.net.frequency, group.net.net_date, used), csv);
       }
       const blob = await zip.generateAsync({ type: 'blob' });
       downloadBlob(blob, zipDownloadName(from, to));

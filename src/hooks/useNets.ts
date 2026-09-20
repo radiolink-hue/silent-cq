@@ -106,6 +106,8 @@ export function useNets() {
         supabase.from('net_participants').select('*').eq('net_id', netId).order('callsign'),
         supabase.from('signal_reports').select('*').eq('net_id', netId).order('created_at'),
       ]);
+      if (pRes.error) throw pRes.error;
+      if (rRes.error) throw rRes.error;
       return {
         participants: (pRes.data ?? []) as NetParticipant[],
         reports: (rRes.data ?? []) as SignalReport[],
