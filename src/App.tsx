@@ -348,6 +348,7 @@ export default function App() {
               onDeleteParticipant={nets.deleteParticipant}
               onDeleteReport={nets.deleteReport}
               fetchNetsByDate={nets.fetchNetsByDate}
+              fetchNetsInDateRange={nets.fetchNetsInDateRange}
               fetchNetExportData={nets.fetchNetExportData}
               isAdmin={isAdmin}
               onToast={(title, message) =>

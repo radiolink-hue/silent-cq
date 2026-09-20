@@ -72,6 +72,34 @@ export function useNets() {
     });
   }, []);
 
+  const fetchNetsInDateRange = useCallback(async (from: string, to: string): Promise<Net[]> => {
+    const { start } = jerusalemDateToUtcRange(from);
+    const { end } = jerusalemDateToUtcRange(to);
+    const [byDate, byStart] = await Promise.all([
+      supabase
+        .from('nets')
+        .select('*')
+        .gte('net_date', from)
+        .lte('net_date', to)
+        .order('net_date', { ascending: true }),
+      supabase
+        .from('nets')
+        .select('*')
+        .gte('starts_at', start.toISOString())
+        .lt('starts_at', end.toISOString())
+        .order('net_date', { ascending: true }),
+    ]);
+    const rows = [...(byDate.data ?? []), ...(byStart.data ?? [])] as Net[];
+    const seen = new Set<string>();
+    return rows
+      .filter((n) => {
+        if (seen.has(n.id)) return false;
+        seen.add(n.id);
+        return true;
+      })
+      .sort((a, b) => a.net_date.localeCompare(b.net_date) || a.name.localeCompare(b.name));
+  }, []);
+
   const fetchNetExportData = useCallback(
     async (netId: string): Promise<{ participants: NetParticipant[]; reports: SignalReport[] }> => {
       const [pRes, rRes] = await Promise.all([
@@ -501,6 +529,7 @@ export function useNets() {
     deleteParticipant,
     deleteReport,
     fetchNetsByDate,
+    fetchNetsInDateRange,
     fetchNetExportData,
     reload: loadNets,
   };

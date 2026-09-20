@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Network, Plus, Trash2, Download, FileDown, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X } from 'lucide-react';
+import { Network, Plus, Trash2, Download, FileDown, FileArchive, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X } from 'lucide-react';
 import { BANDS, MODES, Net, NetParticipant, NewNet, NewNetParticipant, NewSignalReport, SignalReport } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import ExportReportsDialog from '@/components/ExportReportsDialog';
 import CallsignLink from '@/components/CallsignLink';
 import { getActiveNet } from '@/lib/nets';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
@@ -24,6 +25,7 @@ interface NetManagerProps {
   onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onDeleteReport: (reportId: string) => Promise<boolean>;
   fetchNetsByDate: (date: string) => Promise<Net[]>;
+  fetchNetsInDateRange: (from: string, to: string) => Promise<Net[]>;
   fetchNetExportData: (netId: string) => Promise<{ participants: NetParticipant[]; reports: SignalReport[] }>;
   isAdmin?: boolean;
   onToast: (title: string, message: string, isError?: boolean) => void;
@@ -65,6 +67,7 @@ export default function NetManager({
   onDeleteParticipant,
   onDeleteReport,
   fetchNetsByDate,
+  fetchNetsInDateRange,
   fetchNetExportData,
   isAdmin,
   onToast,
@@ -89,6 +92,7 @@ export default function NetManager({
   const [exportNetId, setExportNetId] = useState('');
   const [exporting, setExporting] = useState(false);
   const [loadingDateNets, setLoadingDateNets] = useState(false);
+  const [showExportReports, setShowExportReports] = useState(false);
 
   const selectedNet = nets.find((n) => n.id === selectedNetId) ?? null;
   const isHFNet = selectedNet ? !['FM', 'FT8', 'FT4', 'VARAC', 'SATELLITE', 'DIGITAL VOICE'].includes(selectedNet.mode) : true;
@@ -207,14 +211,26 @@ export default function NetManager({
           <Network className="h-5 w-5 text-brand-500" />
           {t('netManager')}
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowCreate((s) => !s)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-95"
-        >
-          {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showCreate ? t('cancel') : t('netCreateTitle')}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowExportReports(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 active:scale-95"
+            >
+              <FileArchive className="h-4 w-4" />
+              {t('exportReports')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowCreate((s) => !s)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 active:scale-95"
+          >
+            {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showCreate ? t('cancel') : t('netCreateTitle')}
+          </button>
+        </div>
       </div>
 
       {/* Create Net form */}
@@ -596,6 +612,15 @@ export default function NetManager({
         </div>
       </div>
 
+      <ExportReportsDialog
+        open={showExportReports}
+        today={today}
+        minDate={minDate}
+        onClose={() => setShowExportReports(false)}
+        fetchNetsInDateRange={fetchNetsInDateRange}
+        fetchNetExportData={fetchNetExportData}
+        onToast={onToast}
+      />
       <ConfirmDialog
         open={!!pendingNetDelete}
         title={t('netDelete')}
