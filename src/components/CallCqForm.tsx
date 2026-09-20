@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Radio, Loader2, Send, Info, RadioTower, Activity } from 'lucide-react';
-import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession } from '@/types';
+import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession, defaultModeForBand } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { gridToLatLng } from '@/lib/maidenhead';
-import { getActiveNet, type NetSchedule } from '@/lib/nets';
-import { useServerUtcNow } from '@/hooks/useServerUtcNow';
+import type { LiveNetSchedule } from '@/lib/liveNetSchedule';
 import type { CatTelemetry } from '@/hooks/useCatControl';
 
 interface CallCqFormProps {
@@ -13,26 +12,28 @@ interface CallCqFormProps {
   myCallsign: string;
   myGridsquare: string;
   myCity: string;
+  myPower: string;
+  liveNet: LiveNetSchedule | null;
   catTelemetry: CatTelemetry | null;
   catConnected: boolean;
   vfoMoving: boolean;
   settlingSeconds: number;
 }
 
-const empty = {
-  band: '20m',
-  mode: 'USB',
-  frequency: '',
-  power: '',
+const emptyDefaults = {
+  band: '40m',
+  mode: 'LSB',
+  frequency: '7.165',
   antenna: 'Dipole',
-  city: '',
   comments: '',
 };
 
-function defaultModeForBand(band: string): string {
-  if (band === '40m' || band === '60m' || band === '80m' || band === '160m') return 'LSB';
-  if (band === '2m' || band === '70cm' || band === '23cm') return 'FM';
-  return 'USB';
+function emptyForm(power: string, city: string) {
+  return {
+    ...emptyDefaults,
+    power,
+    city,
+  };
 }
 
 export default function CallCqForm({
@@ -41,18 +42,18 @@ export default function CallCqForm({
   myCallsign,
   myGridsquare,
   myCity,
+  myPower,
+  liveNet,
   catTelemetry,
   catConnected,
   vfoMoving,
   settlingSeconds,
 }: CallCqFormProps) {
   const { t } = useApp();
-  const utcNow = useServerUtcNow();
-  const [form, setForm] = useState({ ...empty, city: myCity });
+  const [form, setForm] = useState(() => emptyForm(myPower, myCity));
   const [gridsquare, setGridsquare] = useState(myGridsquare);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [activeNet, setActiveNet] = useState<NetSchedule | null>(null);
 
   useEffect(() => {
     setGridsquare(myGridsquare);
@@ -60,20 +61,22 @@ export default function CallCqForm({
   }, [myGridsquare, myCity]);
 
   useEffect(() => {
-    if (!utcNow) return;
-    const net = getActiveNet(utcNow);
-    setActiveNet(net);
-    if (net) {
-      setForm((f) => ({
-        ...f,
-        band: net.band,
-        mode: net.mode,
-        frequency: net.frequency,
-        power: net.power,
-        antenna: net.id === 'allstar' ? 'Vertical' : f.antenna,
-      }));
-    }
-  }, [utcNow]);
+    if (liveNet) return;
+    if (!myPower) return;
+    setForm((f) => (f.power === myPower ? f : { ...f, power: myPower }));
+  }, [myPower, liveNet]);
+
+  useEffect(() => {
+    if (!liveNet) return;
+    setForm((f) => ({
+      ...f,
+      band: liveNet.band,
+      mode: liveNet.mode,
+      frequency: liveNet.frequency,
+      power: liveNet.power,
+      antenna: liveNet.antenna,
+    }));
+  }, [liveNet]);
 
   useEffect(() => {
     if (!catConnected || !catTelemetry) return;
@@ -91,7 +94,7 @@ export default function CallCqForm({
     setForm((f) => (f.mode === nextMode ? f : { ...f, mode: nextMode }));
   }, [form.band]);
 
-  const set = (k: keyof typeof empty, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof ReturnType<typeof emptyForm>, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const validateFreq = (freq: string, band: string): boolean => {
     const f = parseFloat(freq);
@@ -104,7 +107,7 @@ export default function CallCqForm({
   const validatePower = (power: string): boolean => {
     const p = parseInt(power, 10);
     if (isNaN(p)) return false;
-    return p >= 1 && p <= 1000;
+    return p >= 1 && p <= 1500;
   };
 
   const doSubmit = async (payload: NewCqSession): Promise<boolean> => {
@@ -145,7 +148,7 @@ export default function CallCqForm({
     const ok = await doSubmit(payload);
     setSubmitting(false);
     if (ok) {
-      setForm({ ...empty, city: payload.city.trim() || myCity });
+      setForm(emptyForm(myPower, payload.city.trim() || myCity));
       setGridsquare(payload.gridsquare.trim().toUpperCase() || myGridsquare);
       onSuccess();
     }
@@ -166,12 +169,12 @@ export default function CallCqForm({
           <h2 className="text-xl font-bold">{t('formTitle')}</h2>
         </div>
 
-        {activeNet && (
+        {liveNet && (
           <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-brand-500/10 px-3.5 py-2.5">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
             <div>
               <p className="text-sm font-bold text-brand-700 dark:text-brand-300">
-                {t('netDetected')}: {t('lang') === 'he' ? activeNet.nameHe : activeNet.name}
+                {t('netDetected')}: {t('lang') === 'he' ? liveNet.nameHe : liveNet.name}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('netDetectedDesc')}</p>
             </div>
@@ -214,7 +217,15 @@ export default function CallCqForm({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={label} htmlFor="band">{t('band')}</label>
-              <select id="band" value={form.band} onChange={(e) => set('band', e.target.value)} className={field}>
+              <select
+                id="band"
+                value={form.band}
+                onChange={(e) => {
+                  const band = e.target.value;
+                  setForm((f) => ({ ...f, band, mode: defaultModeForBand(band) }));
+                }}
+                className={field}
+              >
                 {BANDS.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>

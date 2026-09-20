@@ -83,7 +83,7 @@ const dict: Dict = {
   noReports: { he: 'אין דיווחים עדיין', en: 'No reports yet' },
 
   loginTitle: { he: 'התחברות', en: 'Login' },
-  loginSubtitle: { he: 'הזן את אות הקריאה, ריבוע המיקום והעיר שלך', en: 'Enter your callsign, grid square, and city' },
+  loginSubtitle: { he: 'הזן את אות הקריאה, ריבוע המיקום, העיר וההספק שלך', en: 'Enter your callsign, grid square, city, and power' },
   loginCitySubtitle: { he: 'חסרה עיר בפרופיל. הזן את עיר ההפעלה שלך', en: 'Your profile is missing a city. Enter your operating city' },
   loginButton: { he: 'התחבר', en: 'Login' },
   loginCallsignPlaceholder: { he: '', en: '' },
@@ -118,7 +118,7 @@ const dict: Dict = {
   adminDeleteError: { he: 'מחיקת הדוח נכשלה', en: 'Failed to delete report' },
 
   freqOutOfRange: { he: 'תדר מחוץ לתחום המותר לטווח זה', en: 'Frequency out of allowed range for this band' },
-  powerOutOfRange: { he: 'הספק חייב להיות בין 1 ל-1000 וואט', en: 'Power must be between 1 and 1000 watts' },
+  powerOutOfRange: { he: 'הספק חייב להיות מספר שלם בין 1 ל-1500 וואט', en: 'Power must be an integer between 1 and 1500 watts' },
 
   tabNets: { he: 'רשתות', en: 'Nets' },
   netManager: { he: 'ניהול רשת', en: 'Net Manager' },
@@ -170,6 +170,7 @@ const dict: Dict = {
   qrzName: { he: 'שם', en: 'Name' },
   qrzViewFull: { he: 'צפה בפרופיל מלא ב-QRZ', en: 'View Full Profile on QRZ' },
   qrzLookupPartial: { he: 'חלק מהנתונים אינם זמינים', en: 'Some data unavailable' },
+  noActiveNet: { he: 'אין רשת פעילה', en: 'No Active Net' },
   netDetected: { he: 'רשת פעילה זוהתה', en: 'Active Net Detected' },
   netDetectedDesc: { he: 'הטופס הותאם אוטומטית לרשת הפעילה', en: 'Form auto-configured for active net' },
   fmNetNoReports: { he: 'רשת FM - דוחות אות אינם זמינים', en: 'FM Net - Signal reports not available' },

@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { Radio, Loader2 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import {
+  DEFAULT_OPERATOR_POWER,
+  parseOperatorPower,
+} from '@/lib/operatorProfile';
 
 const CALLSIGN_RE = /^(4[XYZ]|[WNKA]|[G]|[F]|[ZS]|[VK])/i;
 
 interface LoginScreenProps {
-  onLogin: (callsign: string, gridsquare: string, city: string, connectRadio: boolean) => void;
+  onLogin: (callsign: string, gridsquare: string, city: string, power: number, connectRadio: boolean) => void;
   initialCallsign?: string;
   initialGridsquare?: string;
   initialCity?: string;
+  initialPower?: number;
   cityOnly?: boolean;
 }
 
@@ -17,15 +22,18 @@ export default function LoginScreen({
   initialCallsign = '',
   initialGridsquare = '',
   initialCity = '',
+  initialPower = DEFAULT_OPERATOR_POWER,
   cityOnly = false,
 }: LoginScreenProps) {
   const { t } = useApp();
   const [callsign, setCallsign] = useState(initialCallsign);
   const [gridsquare, setGridsquare] = useState(initialGridsquare);
   const [city, setCity] = useState(initialCity);
+  const [power, setPower] = useState(String(initialPower || DEFAULT_OPERATOR_POWER));
   const [callsignError, setCallsignError] = useState('');
   const [gridError, setGridError] = useState(false);
   const [cityError, setCityError] = useState(false);
+  const [powerError, setPowerError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const finish = (connectRadio: boolean) => {
@@ -51,8 +59,14 @@ export default function LoginScreen({
       return;
     }
     setCityError(false);
+    const parsedPower = parseOperatorPower(power);
+    if (parsedPower == null) {
+      setPowerError(true);
+      return;
+    }
+    setPowerError(false);
     setSubmitting(true);
-    onLogin(trimmed.toUpperCase(), gridsquare.trim().toUpperCase(), city.trim(), connectRadio);
+    onLogin(trimmed.toUpperCase(), gridsquare.trim().toUpperCase(), city.trim(), parsedPower, connectRadio);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -122,6 +136,19 @@ export default function LoginScreen({
               autoFocus={cityOnly}
             />
             {cityError && <p className="mt-1 text-xs font-semibold text-red-500">{t('cityRequired')}</p>}
+          </div>
+
+          <div>
+            <label className={label} htmlFor="login-power">{t('powerWatts')}</label>
+            <input
+              id="login-power"
+              value={power}
+              onChange={(e) => setPower(e.target.value)}
+              inputMode="numeric"
+              className={`${field} font-mono ${powerError ? 'border-red-400 ring-2 ring-red-400/30' : ''}`}
+              autoComplete="off"
+            />
+            {powerError && <p className="mt-1 text-xs font-semibold text-red-500">{t('powerOutOfRange')}</p>}
           </div>
 
           <button
