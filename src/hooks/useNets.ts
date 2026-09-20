@@ -157,6 +157,11 @@ export function useNets() {
       await supabase.from('net_participants').delete().in('id', plan.toRemoveIds);
     }
 
+    for (const row of plan.toUpdate) {
+      const { id, ...fields } = row;
+      await supabase.from('net_participants').update(fields).eq('id', id);
+    }
+
     if (plan.toInsert.length > 0) {
       await supabase.from('net_participants').insert(plan.toInsert);
     }
@@ -342,9 +347,50 @@ export function useNets() {
 
   const addParticipant = useCallback(
     async (netId: string, payload: NewNetParticipant): Promise<{ error: boolean; exists?: boolean }> => {
+      const callsign = payload.callsign.trim().toUpperCase();
+      const fields = {
+        callsign,
+        grid: payload.grid ?? '',
+        city: payload.city ?? '',
+        antenna: payload.antenna ?? '',
+        power: payload.power ?? '',
+      };
+
+      const { data: existing, error: existingErr } = await supabase
+        .from('net_participants')
+        .select('id, callsign')
+        .eq('net_id', netId);
+      if (existingErr) return { error: true };
+
+      const matches = (existing ?? []).filter(
+        (p) => p.callsign.trim().toUpperCase() === callsign
+      );
+
+      if (matches.length > 0) {
+        const keepId = matches[0].id;
+        const extraIds = matches.slice(1).map((p) => p.id);
+        const { data, error: err } = await supabase
+          .from('net_participants')
+          .update(fields)
+          .eq('id', keepId)
+          .select()
+          .maybeSingle();
+        if (err || !data) return { error: true };
+        if (extraIds.length > 0) {
+          await supabase.from('net_participants').delete().in('id', extraIds);
+        }
+        setParticipants((prev) =>
+          prev
+            .filter((p) => p.id === keepId || !extraIds.includes(p.id))
+            .map((p) => (p.id === keepId ? (data as NetParticipant) : p))
+            .sort((a, b) => a.callsign.localeCompare(b.callsign))
+        );
+        return { error: false };
+      }
+
       const { data, error: err } = await supabase
         .from('net_participants')
-        .insert({ ...payload, net_id: netId })
+        .insert({ ...fields, net_id: netId })
         .select()
         .maybeSingle();
       if (err) {
@@ -353,11 +399,9 @@ export function useNets() {
       }
       if (data) {
         setParticipants((prev) =>
-          prev.some((p) => p.callsign.toUpperCase() === payload.callsign.toUpperCase())
-            ? prev
-            : [...prev, data as NetParticipant].sort((a, b) =>
-                a.callsign.localeCompare(b.callsign)
-              )
+          [...prev, data as NetParticipant].sort((a, b) =>
+            a.callsign.localeCompare(b.callsign)
+          )
         );
       }
       return { error: false };

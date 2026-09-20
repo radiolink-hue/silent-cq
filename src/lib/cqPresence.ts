@@ -57,16 +57,28 @@ export function filterParticipantsToLiveCq(
   return participants.filter((p) => liveCallsigns.has(p.callsign.toUpperCase()));
 }
 
+export interface NetParticipantFields {
+  callsign: string;
+  grid: string;
+  city: string;
+  antenna: string;
+  power: string;
+}
+
 export interface NetParticipantSyncPlan {
-  toInsert: {
-    net_id: string;
-    callsign: string;
-    grid: string;
-    city: string;
-    antenna: string;
-    power: string;
-  }[];
+  toInsert: ({ net_id: string } & NetParticipantFields)[];
+  toUpdate: ({ id: string } & NetParticipantFields)[];
   toRemoveIds: string[];
+}
+
+function fieldsFromSession(session: CqSession): NetParticipantFields {
+  return {
+    callsign: session.callsign.trim().toUpperCase(),
+    grid: session.gridsquare || '',
+    city: session.city || '',
+    antenna: session.antenna || '',
+    power: session.power || '',
+  };
 }
 
 export function planNetParticipantSync(
@@ -76,36 +88,45 @@ export function planNetParticipantSync(
   now: number = Date.now()
 ): NetParticipantSyncPlan {
   const liveSessions = sessions.filter((s) => isLiveSilentCqPost(s, now));
-  const liveCallsigns = liveSilentCqCallsigns(liveSessions, now);
 
-  const toRemoveIds = existing
-    .filter((p) => !liveCallsigns.has(p.callsign.toUpperCase()))
-    .map((p) => p.id);
+  const groups = new Map<string, { id: string; callsign: string }[]>();
+  const toRemoveIds: string[] = [];
 
-  const existingLive = new Set(
-    existing
-      .filter((p) => liveCallsigns.has(p.callsign.toUpperCase()))
-      .map((p) => p.callsign.toUpperCase())
-  );
-
-  const seen = new Set(existingLive);
-  const toInsert: NetParticipantSyncPlan['toInsert'] = [];
-
-  for (const session of liveSessions) {
-    const cs = session.callsign.trim().toUpperCase();
-    if (seen.has(cs)) continue;
-    seen.add(cs);
-    toInsert.push({
-      net_id: netId,
-      callsign: cs,
-      grid: session.gridsquare || '',
-      city: session.city || '',
-      antenna: session.antenna || '',
-      power: session.power || '',
-    });
+  for (const row of existing) {
+    const key = row.callsign.trim().toUpperCase();
+    if (!key) {
+      toRemoveIds.push(row.id);
+      continue;
+    }
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
   }
 
-  return { toInsert, toRemoveIds };
+  const handled = new Set<string>();
+  const toInsert: NetParticipantSyncPlan['toInsert'] = [];
+  const toUpdate: NetParticipantSyncPlan['toUpdate'] = [];
+
+  for (const session of liveSessions) {
+    const fields = fieldsFromSession(session);
+    if (!fields.callsign || handled.has(fields.callsign)) continue;
+    handled.add(fields.callsign);
+
+    const rows = groups.get(fields.callsign) ?? [];
+    if (rows.length === 0) {
+      toInsert.push({ net_id: netId, ...fields });
+      continue;
+    }
+    toUpdate.push({ id: rows[0].id, ...fields });
+    for (const extra of rows.slice(1)) toRemoveIds.push(extra.id);
+  }
+
+  for (const [cs, rows] of groups) {
+    if (handled.has(cs)) continue;
+    for (const row of rows) toRemoveIds.push(row.id);
+  }
+
+  return { toInsert, toUpdate, toRemoveIds };
 }
 
 export function shouldSyncNetSignalReport(
