@@ -88,6 +88,19 @@
   }
 }
 
+@media (max-width: 480px) {
+  .mobile-tab-nav {
+    bottom: 70px;
+  }
+  .netlify-spacer {
+    height: 70px;
+    background: #f1f5f9;
+  }
+  .dark .netlify-spacer {
+    background: #020617;
+  }
+}
+
 /* Mobile tab bar: home-indicator clearance */
 @media (max-width: 639px) {
   .pb-nav-safe {
