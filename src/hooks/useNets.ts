@@ -8,6 +8,7 @@ import {
   isLiveSilentCqPost,
   liveSilentCqCallsigns,
   planNetParticipantSync,
+  participantIdsForCallsign,
   shouldSyncNetSignalReport,
 } from '@/lib/cqPresence';
 import { pickExistingNetSession } from '@/lib/netSession';
@@ -203,8 +204,37 @@ export function useNets() {
       await supabase.from('net_participants').update(fields).eq('id', id);
     }
 
-    if (plan.toInsert.length > 0) {
-      await supabase.from('net_participants').insert(plan.toInsert);
+    for (const row of plan.toInsert) {
+      const { net_id, ...fields } = row;
+      const { data: latest, error: latestErr } = await supabase
+        .from('net_participants')
+        .select('id, callsign')
+        .eq('net_id', net_id);
+      if (latestErr) return;
+
+      const ids = participantIdsForCallsign(latest ?? [], fields.callsign);
+      if (ids.length > 0) {
+        await supabase.from('net_participants').update(fields).eq('id', ids[0]);
+        if (ids.length > 1) {
+          await supabase.from('net_participants').delete().in('id', ids.slice(1));
+        }
+        continue;
+      }
+
+      const { error: insertErr } = await supabase.from('net_participants').insert(row);
+      if (!insertErr) continue;
+      if (insertErr.code !== '23505') return;
+
+      const { data: raced } = await supabase
+        .from('net_participants')
+        .select('id, callsign')
+        .eq('net_id', net_id);
+      const racedIds = participantIdsForCallsign(raced ?? [], fields.callsign);
+      if (racedIds.length === 0) continue;
+      await supabase.from('net_participants').update(fields).eq('id', racedIds[0]);
+      if (racedIds.length > 1) {
+        await supabase.from('net_participants').delete().in('id', racedIds.slice(1));
+      }
     }
   }, []);
 

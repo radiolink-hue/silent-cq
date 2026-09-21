@@ -5,6 +5,7 @@ import {
   filterParticipantsToLiveCq,
   isLiveSilentCqPost,
   liveSilentCqCallsigns,
+  participantIdsForCallsign,
   planNetParticipantSync,
   shouldSyncNetSignalReport,
 } from './cqPresence';
@@ -138,6 +139,19 @@ describe('planNetParticipantSync', () => {
     assert.deepEqual(plan.toInsert, []);
     assert.equal(plan.toUpdate[0].id, 'p-a');
     assert.deepEqual(plan.toRemoveIds, ['p-b']);
+  });
+
+  it('matches an existing participant by callsign regardless of case', () => {
+    assert.deepEqual(
+      participantIdsForCallsign(
+        [
+          { id: 'p1', callsign: '4x1aa' },
+          { id: 'p2', callsign: '4X1DA' },
+        ],
+        '4X1AA'
+      ),
+      ['p1']
+    );
   });
 });
 

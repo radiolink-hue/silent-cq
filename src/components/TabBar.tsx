@@ -20,7 +20,9 @@ export default function TabBar({ active, onChange, activeCount, isAdmin }: TabBa
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/90 pb-nav-safe backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90 sm:static sm:mx-auto sm:mt-6 sm:max-w-md sm:rounded-full sm:border sm:bg-transparent sm:p-1.5 sm:dark:bg-transparent sm:glass">
+    <>
+      <div className="netlify-spacer" aria-hidden="true" />
+      <nav className="mobile-tab-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/90 pb-nav-safe backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90 sm:static sm:bottom-auto sm:mx-auto sm:mt-6 sm:max-w-md sm:rounded-full sm:border sm:bg-transparent sm:p-1.5 sm:dark:bg-transparent sm:glass">
       <div className="mx-auto flex max-w-6xl items-center justify-around gap-1 px-2 pt-1.5 sm:justify-between sm:p-0">
         {tabs.map(({ key, label, icon: Icon, badge }) => {
           const isActive = active === key;
@@ -51,5 +53,6 @@ export default function TabBar({ active, onChange, activeCount, isAdmin }: TabBa
         })}
       </div>
     </nav>
+    </>
   );
 }

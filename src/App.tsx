@@ -34,6 +34,7 @@ import { Calendar } from 'lucide-react';
 
 export default function App() {
   const { t, lang } = useApp();
+  const [tab, setTab] = useState<Tab>('active');
   const {
     sessions,
     loading,
@@ -44,12 +45,10 @@ export default function App() {
     deleteSession,
     hasReported,
     getReportsForSession,
-  } = useSessions();
+  } = useSessions(tab === 'active');
   const nets = useNets();
   const { permission, requestPermission, alert } = useNotifications();
   const { status: allmonStatus } = useAllstarMonitor();
-
-  const [tab, setTab] = useState<Tab>('active');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CqSession | null>(null);
   const [showTodaysReport, setShowTodaysReport] = useState(false);
