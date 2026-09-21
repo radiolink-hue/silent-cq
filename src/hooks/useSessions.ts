@@ -7,25 +7,52 @@ function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
 }
 
-export function useSessions() {
+function sameSessionList(a: CqSession[], b: CqSession[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id ||
+      x.callsign !== y.callsign ||
+      x.band !== y.band ||
+      x.mode !== y.mode ||
+      x.frequency !== y.frequency ||
+      x.power !== y.power ||
+      x.antenna !== y.antenna ||
+      x.city !== y.city ||
+      x.gridsquare !== y.gridsquare ||
+      x.heard_count !== y.heard_count ||
+      x.active !== y.active ||
+      x.created_at !== y.created_at ||
+      x.comments !== y.comments
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function useSessions(pollWhenVisible = false) {
   const [sessions, setSessions] = useState<CqSession[]>([]);
   const [reports, setReports] = useState<CqSignalReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     const { data, error: err } = await supabase
       .from('cq_sessions')
       .select('*')
       .eq('active', true)
       .order('created_at', { ascending: false });
     if (err) {
-      setError(true);
+      if (!opts?.silent) setError(true);
     } else {
       setError(false);
-      setSessions(filterExpired(data ?? []));
+      const next = filterExpired(data ?? []);
+      setSessions((prev) => (sameSessionList(prev, next) ? prev : next));
     }
-    setLoading(false);
+    if (!opts?.silent) setLoading(false);
   }, []);
 
   const loadReports = useCallback(async () => {
@@ -97,6 +124,15 @@ export function useSessions() {
     }, 30_000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!pollWhenVisible) return;
+    void load({ silent: true });
+    const interval = setInterval(() => {
+      void load({ silent: true });
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [pollWhenVisible, load]);
 
   const createSession = useCallback(async (payload: NewCqSession) => {
     // Remove any older active sessions for this callsign so only one remains
