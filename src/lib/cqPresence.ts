@@ -129,6 +129,18 @@ export function planNetParticipantSync(
   return { toInsert, toUpdate, toRemoveIds };
 }
 
+/** Case-insensitive match of a callsign to participant rows in one net session. */
+export function participantIdsForCallsign(
+  existing: { id: string; callsign: string }[],
+  callsign: string
+): string[] {
+  const key = callsign.trim().toUpperCase();
+  if (!key) return [];
+  return existing
+    .filter((p) => p.callsign.trim().toUpperCase() === key)
+    .map((p) => p.id);
+}
+
 export function shouldSyncNetSignalReport(
   txCallsign: string,
   rxCallsign: string,
