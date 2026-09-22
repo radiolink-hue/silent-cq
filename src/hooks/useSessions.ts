@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
-import { ADMIN_CALLSIGN, ACTIVE_CQ_SESSION_SELECT, canReplaceWithProxy, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
+import { ADMIN_CALLSIGN, canReplaceWithProxy, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
@@ -45,14 +45,30 @@ export function useSessions(pollWhenVisible = false) {
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .select(ACTIVE_CQ_SESSION_SELECT)
+      .select('*')
       .eq('active', true)
       .order('created_at', { ascending: false });
     if (err) {
       if (!opts?.silent) setError(true);
     } else {
       setError(false);
-      const next = filterExpired((data ?? []).map((row) => hydrateProxySession(row as CqSession)));
+      let rows = (data ?? []) as CqSession[];
+      if (rows.length > 0) {
+        const flags = await supabase
+          .from('cq_sessions')
+          .select('id, is_proxy, proxy_added_by')
+          .in('id', rows.map((row) => row.id));
+        if (!flags.error && flags.data) {
+          const byId = new Map(
+            flags.data.map((row: { id: string; is_proxy?: boolean; proxy_added_by?: string | null }) => [row.id, row])
+          );
+          rows = rows.map((row) => {
+            const extra = byId.get(row.id);
+            return extra ? { ...row, ...extra } : row;
+          });
+        }
+      }
+      const next = filterExpired(rows.map((row) => hydrateProxySession(row)));
       setSessions((prev) => (sameSessionList(prev, next) ? prev : next));
     }
     if (!opts?.silent) setLoading(false);
@@ -184,7 +200,7 @@ export function useSessions(pollWhenVisible = false) {
 
     const listed = await supabase
       .from('cq_sessions')
-      .select(ACTIVE_CQ_SESSION_SELECT)
+      .select('*')
       .eq('active', true);
 
     const matches = ((listed.data ?? []) as CqSession[])
