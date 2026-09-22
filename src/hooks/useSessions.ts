@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
-import { ADMIN_CALLSIGN, canReplaceWithProxy } from '@/lib/adminProxy';
+import { ADMIN_CALLSIGN, canReplaceWithProxy, withProxyRfFallback } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
@@ -147,15 +147,16 @@ export function useSessions(pollWhenVisible = false) {
 
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert({ ...payload, is_proxy: false, proxy_added_by: null })
+      .insert(payload)
       .select()
       .maybeSingle();
     if (err || !data) return { error: true as const };
 
-    // Remove older sessions from local state for this callsign
-    setSessions((prev) => prev.filter(
-      (s) => !(s.callsign.toUpperCase() === payload.callsign.toUpperCase())
-    ));
+    const session = data as CqSession;
+    setSessions((prev) => [
+      session,
+      ...prev.filter((s) => s.callsign.toUpperCase() !== payload.callsign.toUpperCase()),
+    ]);
 
     await supabase.from('cq_events').insert({
       session_id: data.id,
@@ -171,9 +172,11 @@ export function useSessions(pollWhenVisible = false) {
 
   const createProxySession = useCallback(async (payload: NewCqSession) => {
     const callsign = payload.callsign.trim().toUpperCase();
+    const row = withProxyRfFallback({ ...payload, callsign });
+
     const { data: liveRows } = await supabase
       .from('cq_sessions')
-      .select('id, callsign, is_proxy, created_at, active')
+      .select('*')
       .eq('active', true);
 
     const matches = ((liveRows ?? []) as CqSession[]).filter(
@@ -193,16 +196,25 @@ export function useSessions(pollWhenVisible = false) {
         .in('id', matches.map((s) => s.id));
     }
 
-    const { data, error: err } = await supabase
+    const proxyRow = {
+      ...row,
+      is_proxy: true,
+      proxy_added_by: ADMIN_CALLSIGN,
+    };
+
+    let { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert({
-        ...payload,
-        callsign,
-        is_proxy: true,
-        proxy_added_by: ADMIN_CALLSIGN,
-      })
+      .insert(proxyRow)
       .select()
       .maybeSingle();
+
+    // Still publish to Active Users if proxy columns are unavailable.
+    if (err || !data) {
+      const fallback = await supabase.from('cq_sessions').insert(row).select().maybeSingle();
+      data = fallback.data;
+      err = fallback.error;
+    }
+
     if (err || !data) return { error: true as const };
 
     setSessions((prev) => [
