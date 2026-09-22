@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
+import { ADMIN_CALLSIGN, canReplaceWithProxy } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
@@ -25,7 +26,9 @@ function sameSessionList(a: CqSession[], b: CqSession[]): boolean {
       x.heard_count !== y.heard_count ||
       x.active !== y.active ||
       x.created_at !== y.created_at ||
-      x.comments !== y.comments
+      x.comments !== y.comments ||
+      x.is_proxy !== y.is_proxy ||
+      x.proxy_added_by !== y.proxy_added_by
     ) {
       return false;
     }
@@ -144,7 +147,7 @@ export function useSessions(pollWhenVisible = false) {
 
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert(payload)
+      .insert({ ...payload, is_proxy: false, proxy_added_by: null })
       .select()
       .maybeSingle();
     if (err || !data) return { error: true as const };
@@ -162,6 +165,59 @@ export function useSessions(pollWhenVisible = false) {
       band: data.band,
       mode: data.mode,
       message: `${data.callsign} · ${data.band} ${data.mode} ${data.frequency}`.trim(),
+    });
+    return { error: false as const, session: data as CqSession };
+  }, []);
+
+  const createProxySession = useCallback(async (payload: NewCqSession) => {
+    const callsign = payload.callsign.trim().toUpperCase();
+    const { data: liveRows } = await supabase
+      .from('cq_sessions')
+      .select('id, callsign, is_proxy, created_at, active')
+      .eq('active', true);
+
+    const matches = ((liveRows ?? []) as CqSession[]).filter(
+      (s) =>
+        s.callsign.trim().toUpperCase() === callsign &&
+        !isExpiredCqSession(s)
+    );
+
+    if (!canReplaceWithProxy(matches)) {
+      return { error: true as const, selfReported: true as const };
+    }
+
+    if (matches.length > 0) {
+      await supabase
+        .from('cq_sessions')
+        .update({ active: false })
+        .in('id', matches.map((s) => s.id));
+    }
+
+    const { data, error: err } = await supabase
+      .from('cq_sessions')
+      .insert({
+        ...payload,
+        callsign,
+        is_proxy: true,
+        proxy_added_by: ADMIN_CALLSIGN,
+      })
+      .select()
+      .maybeSingle();
+    if (err || !data) return { error: true as const };
+
+    setSessions((prev) => [
+      data as CqSession,
+      ...prev.filter((s) => s.callsign.toUpperCase() !== callsign),
+    ]);
+
+    await supabase.from('cq_events').insert({
+      session_id: data.id,
+      kind: 'new_cq' satisfies CqEventKind,
+      from_callsign: ADMIN_CALLSIGN,
+      target_callsign: callsign,
+      band: data.band,
+      mode: data.mode,
+      message: `${callsign} · ${data.band} ${data.mode} ${data.frequency}`.trim(),
     });
     return { error: false as const, session: data as CqSession };
   }, []);
@@ -246,6 +302,7 @@ export function useSessions(pollWhenVisible = false) {
     loading,
     error,
     createSession,
+    createProxySession,
     submitReport,
     deleteReport,
     deleteSession,

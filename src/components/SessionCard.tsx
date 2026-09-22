@@ -58,6 +58,14 @@ export default function SessionCard({
         <div className="min-w-0 flex-1">
           <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
             <h3 className={`font-bold tracking-wide ${compact ? 'text-sm' : 'text-xl'}`}><CallsignLink callsign={session.callsign} /></h3>
+            {session.is_proxy && (
+              <span
+                title={t('adminProxyTooltip')}
+                className={`inline-flex items-center rounded-full bg-amber-500 font-bold text-amber-950 ${compact ? 'px-1.5 py-0 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}
+              >
+                {t('adminBadge')}
+              </span>
+            )}
             <span className={`inline-flex items-center gap-1 rounded-full bg-brand-500/15 font-bold text-brand-600 dark:text-brand-300 ${compact ? 'px-1.5 py-0 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
               <span className={`animate-pulse rounded-full bg-brand-500 ${compact ? 'h-1 w-1' : 'h-1.5 w-1.5'}`} />
               {t('liveNow')}

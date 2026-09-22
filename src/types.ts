@@ -16,6 +16,8 @@ export interface CqSession {
   active: boolean;
   created_at: string;
   allstar_source?: string;
+  is_proxy?: boolean;
+  proxy_added_by?: string | null;
 }
 
 export type CqEventKind = 'new_cq' | 'received_ok' | 'calling_you';
@@ -34,7 +36,7 @@ export interface CqEvent {
 
 export type NewCqSession = Omit<
   CqSession,
-  'id' | 'heard_count' | 'active' | 'created_at'
+  'id' | 'heard_count' | 'active' | 'created_at' | 'is_proxy' | 'proxy_added_by'
 >;
 
 export const BANDS = [
@@ -121,6 +123,8 @@ export interface NetParticipant {
   antenna: string;
   power: string;
   created_at: string;
+  is_proxy?: boolean;
+  proxy_added_by?: string | null;
 }
 
 export type NewNetParticipant = Omit<NetParticipant, 'id' | 'created_at' | 'net_id'>;

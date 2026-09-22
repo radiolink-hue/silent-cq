@@ -1,4 +1,4 @@
-import { CqSession, NetParticipant } from '../types';
+import type { CqSession, NetParticipant } from '../types.ts';
 
 /** Same lifetime as the live Silent CQ board. */
 export const CQ_SESSION_TTL_MS = 90 * 60 * 1000;
@@ -63,6 +63,8 @@ export interface NetParticipantFields {
   city: string;
   antenna: string;
   power: string;
+  is_proxy: boolean;
+  proxy_added_by: string | null;
 }
 
 export interface NetParticipantSyncPlan {
@@ -78,6 +80,8 @@ function fieldsFromSession(session: CqSession): NetParticipantFields {
     city: session.city || '',
     antenna: session.antenna || '',
     power: session.power || '',
+    is_proxy: session.is_proxy === true,
+    proxy_added_by: session.is_proxy === true ? (session.proxy_added_by || null) : null,
   };
 }
 

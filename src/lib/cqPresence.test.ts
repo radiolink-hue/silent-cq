@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CqSession, NetParticipant } from '../types';
+import type { CqSession, NetParticipant } from '../types.ts';
 import {
   filterParticipantsToLiveCq,
   isLiveSilentCqPost,
@@ -8,7 +8,7 @@ import {
   participantIdsForCallsign,
   planNetParticipantSync,
   shouldSyncNetSignalReport,
-} from './cqPresence';
+} from './cqPresence.ts';
 
 const now = Date.parse('2026-09-19T12:00:00.000Z');
 
@@ -122,6 +122,14 @@ describe('planNetParticipantSync', () => {
     assert.equal(plan.toUpdate[0].city, 'Eilat');
     assert.equal(plan.toUpdate[0].antenna, 'Yagi');
     assert.equal(plan.toUpdate[0].power, '400');
+    assert.equal(plan.toUpdate[0].is_proxy, false);
+  });
+
+  it('copies proxy flags from a live admin-posted session', () => {
+    const live = session({ callsign: '4X1BB', is_proxy: true, proxy_added_by: '4X1DA' });
+    const plan = planNetParticipantSync('net-1', [live], [], now);
+    assert.equal(plan.toInsert[0].is_proxy, true);
+    assert.equal(plan.toInsert[0].proxy_added_by, '4X1DA');
   });
 
   it('keeps one row and drops extras when the same callsign is already listed twice', () => {
