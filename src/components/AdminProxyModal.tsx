@@ -4,6 +4,7 @@ import { BANDS, MODES, NewCqSession, defaultModeForBand } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { gridToLatLng } from '@/lib/maidenhead';
 import type { LiveNetSchedule } from '@/lib/liveNetSchedule';
+import { proxyRfDefaults } from '@/lib/adminProxy';
 import { fetchLookupTable, searchLookupTable, type LookupEntry } from '@/utils/lookupTable';
 
 interface AdminProxyModalProps {
@@ -57,9 +58,10 @@ export default function AdminProxyModal({ open, onClose, liveNet, onSubmit }: Ad
     setCity('');
     setPower('');
     setAntenna('');
-    setBand(liveNet?.band ?? '40m');
-    setFrequency(liveNet?.frequency ?? '7.165');
-    setMode(liveNet?.mode ?? 'LSB');
+    const rf = proxyRfDefaults(liveNet);
+    setBand(rf.band);
+    setFrequency(rf.frequency);
+    setMode(rf.mode);
     setError('');
     setPickerOpen(false);
     lastAutoFill.current = '';
@@ -108,13 +110,14 @@ export default function AdminProxyModal({ open, onClose, liveNet, onSubmit }: Ad
     }
     setSubmitting(true);
     setError('');
+    const rf = proxyRfDefaults(liveNet);
     const coords = gridToLatLng(gridSquare);
     const payload: NewCqSession = {
       callsign: cs,
       gridsquare: gridSquare.trim().toUpperCase(),
-      band,
-      mode,
-      frequency: frequency.trim(),
+      band: band.trim() || rf.band,
+      mode: mode.trim() || rf.mode,
+      frequency: frequency.trim() || rf.frequency,
       power: power.trim(),
       antenna: antenna.trim(),
       city: city.trim(),
