@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { canReplaceWithProxy, proxyRfDefaults, withProxyRfFallback } from './adminProxy.ts';
+import { canReplaceWithProxy, hydrateProxySession, proxyRfDefaults, sessionIsProxy, withProxyRfFallback } from './adminProxy.ts';
 
 describe('canReplaceWithProxy', () => {
   it('allows a first proxy post', () => {
@@ -40,5 +40,16 @@ describe('proxyRfDefaults', () => {
     assert.equal(filled.frequency, '7.165');
     assert.equal(filled.mode, 'LSB');
     assert.equal(filled.callsign, '4X1AA');
+  });
+});
+
+describe('sessionIsProxy', () => {
+  it('reads is_proxy, isProxy, or proxy_added_by', () => {
+    assert.equal(sessionIsProxy({ is_proxy: true }), true);
+    assert.equal(sessionIsProxy({ isProxy: true }), true);
+    assert.equal(sessionIsProxy({ is_proxy: 'true' }), true);
+    assert.equal(sessionIsProxy({ proxy_added_by: '4X1DA' }), true);
+    assert.equal(sessionIsProxy({ is_proxy: false }), false);
+    assert.equal(hydrateProxySession({ callsign: '4X1AA', isProxy: true }).is_proxy, true);
   });
 });

@@ -62,8 +62,8 @@ export default function SessionCard({
               <span className={`animate-pulse rounded-full bg-brand-500 ${compact ? 'h-1 w-1' : 'h-1.5 w-1.5'}`} />
               {t('liveNow')}
             </span>
-            {session.is_proxy === true && (
-              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: '#f59e0b', marginLeft: 6 }} />
+            {session.is_proxy && (
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b', marginLeft: '6px' }} />
             )}
           </div>
           {location && (
