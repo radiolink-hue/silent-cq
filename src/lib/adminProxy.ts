@@ -4,9 +4,9 @@ export const PROXY_DEFAULT_BAND = '40m';
 export const PROXY_DEFAULT_FREQUENCY = '7.165';
 export const PROXY_DEFAULT_MODE = 'LSB';
 
-/** Columns Active Users needs, including proxy flags that `*` can omit from a stale schema cache. */
+/** Columns Active Users needs, including proxy flags. */
 export const ACTIVE_CQ_SESSION_SELECT =
-  'id, callsign, gridsquare, band, mode, frequency, power, antenna, city, country, comments, lat, lng, heard_count, active, created_at, allstar_source, is_proxy, proxy_added_by';
+  'id, callsign, gridsquare, city, power, antenna, band, frequency, mode, created_at, comments, country, lat, lng, heard_count, active, allstar_source, is_proxy, proxy_added_by';
 
 /** Band / freq / mode from a live net, or the off-net Silent CQ defaults. */
 export function proxyRfDefaults(liveNet: {
