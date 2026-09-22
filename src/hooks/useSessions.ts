@@ -43,20 +43,11 @@ export function useSessions(pollWhenVisible = false) {
   const [error, setError] = useState(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    let { data, error: err } = await supabase
+    const { data, error: err } = await supabase
       .from('cq_sessions')
       .select(ACTIVE_CQ_SESSION_SELECT)
       .eq('active', true)
       .order('created_at', { ascending: false });
-    if (err) {
-      const fallback = await supabase
-        .from('cq_sessions')
-        .select('*')
-        .eq('active', true)
-        .order('created_at', { ascending: false });
-      data = fallback.data;
-      err = fallback.error;
-    }
     if (err) {
       if (!opts?.silent) setError(true);
     } else {
@@ -195,11 +186,8 @@ export function useSessions(pollWhenVisible = false) {
       .from('cq_sessions')
       .select(ACTIVE_CQ_SESSION_SELECT)
       .eq('active', true);
-    const listedRows = listed.error
-      ? (await supabase.from('cq_sessions').select('*').eq('active', true)).data
-      : listed.data;
 
-    const matches = ((listedRows ?? []) as CqSession[])
+    const matches = ((listed.data ?? []) as CqSession[])
       .map((s) => hydrateProxySession(s))
       .filter(
         (s) =>
