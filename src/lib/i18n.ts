@@ -223,6 +223,11 @@ const dict: Dict = {
   catAutoSubmitToast: { he: 'SILENT CQ עודכן אוטומטית ל-{{freq}} MHz ({{mode}})', en: 'SILENT CQ automatically updated to {{freq}} MHz ({{mode}})' },
   catAutoClose: { he: 'החלון ייסגר אוטומטית...', en: 'Auto-closing...' },
   catLiveFreq: { he: 'CAT', en: 'CAT' },
+
+  adminPosted: { he: 'פורסם על ידי מנהל', en: 'Admin Posted' },
+  adminBadge: { he: 'מנהל', en: 'Admin' },
+  adminProxyTooltip: { he: 'נוסף על ידי המנהל — התחנה לא דיווחה בעצמה', en: 'Added by admin — station has not self-reported' },
+  adminProxySelfReported: { he: 'תחנה זו כבר דיווחה בעצמה — לא ניתן להוסיף רשומת מנהל', en: 'This station has already self-reported — proxy entry not allowed' },
 };
 
 export function makeT(lang: Lang) {

@@ -21,6 +21,7 @@ import TabBar, { Tab } from '@/components/TabBar';
 import ActiveUsers from '@/components/ActiveUsers';
 import MapView from '@/components/MapView';
 import CallCqForm from '@/components/CallCqForm';
+import AdminProxyModal from '@/components/AdminProxyModal';
 import Toasts, { ToastItem } from '@/components/Toasts';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import NetManager from '@/components/NetManager';
@@ -30,7 +31,8 @@ import CallsignModal from '@/components/CallsignModal';
 import CatSettingsModal from '@/components/CatSettingsModal';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { getLiveNet } from '@/lib/liveNetSchedule';
-import { Calendar } from 'lucide-react';
+import { ADMIN_CALLSIGN } from '@/lib/adminProxy';
+import { Calendar, Shield } from 'lucide-react';
 
 export default function App() {
   const { t, lang } = useApp();
@@ -40,11 +42,13 @@ export default function App() {
     loading,
     error,
     createSession,
+    createProxySession,
     submitReport,
     deleteReport,
     deleteSession,
     hasReported,
     getReportsForSession,
+    reload,
   } = useSessions(tab === 'active');
   const nets = useNets();
   const { permission, requestPermission, alert } = useNotifications();
@@ -52,6 +56,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CqSession | null>(null);
   const [showTodaysReport, setShowTodaysReport] = useState(false);
+  const [showAdminProxy, setShowAdminProxy] = useState(false);
   const [showCatSettings, setShowCatSettings] = useState(false);
 
   const savedProfile = loadOperatorProfile();
@@ -248,9 +253,9 @@ export default function App() {
     });
   };
 
-  const isAdmin = myCallsign.toUpperCase() === '4X1DA';
+  const isAdmin = myCallsign.toUpperCase() === ADMIN_CALLSIGN;
   const hasActiveCQ = sessions.some(
-    (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase()
+    (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase() && s.is_proxy !== true
   );
 
   const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity, power: myPower };
@@ -287,7 +292,20 @@ export default function App() {
           <TabBar active={tab} onChange={setTab} activeCount={sessions.length} isAdmin={isAdmin} />
         </div>
 
-        <div className="mt-4 flex justify-end sm:mt-6">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2 sm:mt-6">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAdminProxy(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-2 text-xs font-bold text-amber-950 shadow-lg shadow-amber-500/25 transition hover:bg-amber-600 hover:text-white active:scale-95"
+            >
+              <Shield className="h-4 w-4" />
+              <span className="flex flex-col items-start leading-tight">
+                <span>Admin Posted</span>
+                <span className="text-[10px] font-semibold opacity-90">פורסם על ידי מנהל</span>
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowTodaysReport(true)}
@@ -382,6 +400,25 @@ export default function App() {
         onClose={() => setShowTodaysReport(false)}
         isAdmin={isAdmin}
         adminCallsign={myCallsign}
+      />
+      <AdminProxyModal
+        open={showAdminProxy}
+        onClose={() => setShowAdminProxy(false)}
+        liveNet={liveNet}
+        onSubmit={async (payload) => {
+          const res = await createProxySession(payload);
+          if (!res.error) {
+            void reload();
+            setTab('active');
+            pushToast({
+              id: `proxy-${Date.now()}`,
+              kind: 'new_cq',
+              title: t('submitted'),
+              message: payload.callsign,
+            });
+          }
+          return res;
+        }}
       />
       <CatSettingsModal open={showCatSettings} onClose={() => setShowCatSettings(false)} cat={cat} />
       <CallsignModal />
