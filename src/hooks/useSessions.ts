@@ -52,23 +52,7 @@ export function useSessions(pollWhenVisible = false) {
       if (!opts?.silent) setError(true);
     } else {
       setError(false);
-      let rows = (data ?? []) as CqSession[];
-      if (rows.length > 0) {
-        const flags = await supabase
-          .from('cq_sessions')
-          .select('id, is_proxy, proxy_added_by')
-          .in('id', rows.map((row) => row.id));
-        if (!flags.error && flags.data) {
-          const byId = new Map(
-            flags.data.map((row: { id: string; is_proxy?: boolean; proxy_added_by?: string | null }) => [row.id, row])
-          );
-          rows = rows.map((row) => {
-            const extra = byId.get(row.id);
-            return extra ? { ...row, ...extra } : row;
-          });
-        }
-      }
-      const next = filterExpired(rows.map((row) => hydrateProxySession(row)));
+      const next = filterExpired(data ?? []);
       setSessions((prev) => (sameSessionList(prev, next) ? prev : next));
     }
     if (!opts?.silent) setLoading(false);
@@ -95,23 +79,15 @@ export function useSessions(pollWhenVisible = false) {
         (payload) => {
           setSessions((prev) => {
             if (payload.eventType === 'INSERT') {
-              const row = hydrateProxySession(payload.new as CqSession);
+              const row = payload.new as CqSession;
               if (!row.active || isExpiredCqSession(row)) return prev;
               if (prev.some((s) => s.id === row.id)) return prev;
               return [row, ...prev];
             }
             if (payload.eventType === 'UPDATE') {
-              const incoming = hydrateProxySession(payload.new as CqSession);
-              if (!incoming.active || isExpiredCqSession(incoming)) return prev.filter((s) => s.id !== incoming.id);
-              return prev.map((s) => {
-                if (s.id !== incoming.id) return s;
-                return hydrateProxySession({
-                  ...s,
-                  ...incoming,
-                  is_proxy: incoming.is_proxy || s.is_proxy,
-                  proxy_added_by: incoming.proxy_added_by ?? s.proxy_added_by,
-                });
-              });
+              const row = payload.new as CqSession;
+              if (!row.active || isExpiredCqSession(row)) return prev.filter((s) => s.id !== row.id);
+              return prev.map((s) => (s.id === row.id ? row : s));
             }
             if (payload.eventType === 'DELETE') {
               const old = payload.old as { id: string };

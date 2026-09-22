@@ -62,9 +62,6 @@ export default function SessionCard({
               <span className={`animate-pulse rounded-full bg-brand-500 ${compact ? 'h-1 w-1' : 'h-1.5 w-1.5'}`} />
               {t('liveNow')}
             </span>
-            {session.is_proxy && (
-              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b', marginLeft: '6px' }} />
-            )}
           </div>
           {location && (
             <p className={`flex items-center gap-1 text-slate-500 dark:text-slate-400 ${compact ? 'mt-0 text-[11px]' : 'mt-0.5 text-sm'}`}>
