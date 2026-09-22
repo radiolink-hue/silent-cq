@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
-import { ADMIN_CALLSIGN, canReplaceWithProxy, withProxyRfFallback } from '@/lib/adminProxy';
+import { ADMIN_CALLSIGN, ACTIVE_CQ_SESSION_SELECT, canReplaceWithProxy, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
@@ -43,16 +43,25 @@ export function useSessions(pollWhenVisible = false) {
   const [error, setError] = useState(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    const { data, error: err } = await supabase
+    let { data, error: err } = await supabase
       .from('cq_sessions')
-      .select('*')
+      .select(ACTIVE_CQ_SESSION_SELECT)
       .eq('active', true)
       .order('created_at', { ascending: false });
+    if (err) {
+      const fallback = await supabase
+        .from('cq_sessions')
+        .select('*')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+      data = fallback.data;
+      err = fallback.error;
+    }
     if (err) {
       if (!opts?.silent) setError(true);
     } else {
       setError(false);
-      const next = filterExpired(data ?? []);
+      const next = filterExpired((data ?? []).map((row) => hydrateProxySession(row as CqSession)));
       setSessions((prev) => (sameSessionList(prev, next) ? prev : next));
     }
     if (!opts?.silent) setLoading(false);
@@ -79,15 +88,23 @@ export function useSessions(pollWhenVisible = false) {
         (payload) => {
           setSessions((prev) => {
             if (payload.eventType === 'INSERT') {
-              const row = payload.new as CqSession;
+              const row = hydrateProxySession(payload.new as CqSession);
               if (!row.active || isExpiredCqSession(row)) return prev;
               if (prev.some((s) => s.id === row.id)) return prev;
               return [row, ...prev];
             }
             if (payload.eventType === 'UPDATE') {
-              const row = payload.new as CqSession;
-              if (!row.active || isExpiredCqSession(row)) return prev.filter((s) => s.id !== row.id);
-              return prev.map((s) => (s.id === row.id ? row : s));
+              const incoming = hydrateProxySession(payload.new as CqSession);
+              if (!incoming.active || isExpiredCqSession(incoming)) return prev.filter((s) => s.id !== incoming.id);
+              return prev.map((s) => {
+                if (s.id !== incoming.id) return s;
+                return hydrateProxySession({
+                  ...s,
+                  ...incoming,
+                  is_proxy: incoming.is_proxy || s.is_proxy,
+                  proxy_added_by: incoming.proxy_added_by ?? s.proxy_added_by,
+                });
+              });
             }
             if (payload.eventType === 'DELETE') {
               const old = payload.old as { id: string };
@@ -174,16 +191,21 @@ export function useSessions(pollWhenVisible = false) {
     const callsign = payload.callsign.trim().toUpperCase();
     const row = withProxyRfFallback({ ...payload, callsign });
 
-    const { data: liveRows } = await supabase
+    const listed = await supabase
       .from('cq_sessions')
-      .select('*')
+      .select(ACTIVE_CQ_SESSION_SELECT)
       .eq('active', true);
+    const listedRows = listed.error
+      ? (await supabase.from('cq_sessions').select('*').eq('active', true)).data
+      : listed.data;
 
-    const matches = ((liveRows ?? []) as CqSession[]).filter(
-      (s) =>
-        s.callsign.trim().toUpperCase() === callsign &&
-        !isExpiredCqSession(s)
-    );
+    const matches = ((listedRows ?? []) as CqSession[])
+      .map((s) => hydrateProxySession(s))
+      .filter(
+        (s) =>
+          s.callsign.trim().toUpperCase() === callsign &&
+          !isExpiredCqSession(s)
+      );
 
     if (!canReplaceWithProxy(matches)) {
       return { error: true as const, selfReported: true as const };
@@ -205,7 +227,7 @@ export function useSessions(pollWhenVisible = false) {
     let { data, error: err } = await supabase
       .from('cq_sessions')
       .insert(proxyRow)
-      .select()
+      .select('*')
       .maybeSingle();
 
     // Still publish to Active Users if proxy columns are unavailable.
@@ -217,8 +239,13 @@ export function useSessions(pollWhenVisible = false) {
 
     if (err || !data) return { error: true as const };
 
+    const session = hydrateProxySession({
+      ...(data as CqSession),
+      is_proxy: true,
+      proxy_added_by: ADMIN_CALLSIGN,
+    });
     setSessions((prev) => [
-      data as CqSession,
+      session,
       ...prev.filter((s) => s.callsign.toUpperCase() !== callsign),
     ]);
 
