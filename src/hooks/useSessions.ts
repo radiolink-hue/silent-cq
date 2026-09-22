@@ -147,15 +147,16 @@ export function useSessions(pollWhenVisible = false) {
 
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert({ ...payload, is_proxy: false, proxy_added_by: null })
+      .insert(payload)
       .select()
       .maybeSingle();
     if (err || !data) return { error: true as const };
 
-    // Remove older sessions from local state for this callsign
-    setSessions((prev) => prev.filter(
-      (s) => !(s.callsign.toUpperCase() === payload.callsign.toUpperCase())
-    ));
+    const session = data as CqSession;
+    setSessions((prev) => [
+      session,
+      ...prev.filter((s) => s.callsign.toUpperCase() !== payload.callsign.toUpperCase()),
+    ]);
 
     await supabase.from('cq_events').insert({
       session_id: data.id,
