@@ -138,16 +138,21 @@ export function useSessions(pollWhenVisible = false) {
   }, [pollWhenVisible, load]);
 
   const createSession = useCallback(async (payload: NewCqSession) => {
-    // Remove any older active sessions for this callsign so only one remains
-    await supabase
+    const key = payload.callsign.trim().toUpperCase();
+    const { data: live } = await supabase
       .from('cq_sessions')
-      .update({ active: false })
-      .eq('callsign', payload.callsign)
+      .select('id, callsign')
       .eq('active', true);
+    const ids = ((live ?? []) as { id: string; callsign: string }[])
+      .filter((s) => s.callsign.trim().toUpperCase() === key)
+      .map((s) => s.id);
+    if (ids.length > 0) {
+      await supabase.from('cq_sessions').update({ active: false }).in('id', ids);
+    }
 
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert(payload)
+      .insert({ ...payload, allstar_source: null })
       .select()
       .maybeSingle();
     if (err || !data) return { error: true as const };

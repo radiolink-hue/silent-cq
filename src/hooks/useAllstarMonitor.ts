@@ -28,7 +28,7 @@ export function useAllstarMonitor() {
       };
       const resp = await fetch(apiUrl, { headers });
       if (!resp.ok) {
-        if (mounted.current) setStatus('fallback');
+        if (mounted.current) setStatus('error');
         return;
       }
       const data: AllmonResponse = await resp.json();
@@ -43,11 +43,10 @@ export function useAllstarMonitor() {
       } else if (data.status === 'idle') {
         setStatus('idle');
       } else {
-        setStatus('fallback');
+        setStatus('error');
       }
     } catch {
-      // Graceful timeout — don't show error, fall back to standby
-      if (mounted.current) setStatus('fallback');
+      if (mounted.current) setStatus('error');
     }
   }, []);
 

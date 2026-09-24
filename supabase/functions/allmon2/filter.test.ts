@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseAllmon2, shouldDropAllstarNode } from './filter.ts';
+import { parseAllmon2, parseNodeInfoCgi, shouldDropAllstarNode } from './filter.ts';
 
 describe('shouldDropAllstarNode', () => {
   it('drops the AllStar echo node 1999 even with a placeholder callsign', () => {
@@ -71,5 +71,46 @@ describe('parseAllmon2', () => {
       parsed.nodes.map((n) => n.node),
       ['429730']
     );
+  });
+});
+
+describe('parseNodeInfoCgi', () => {
+  const html = `
+    <table>
+      <tr><th>Node</th><th>Callsign</th><th>Frequency</th><th>CTCSS</th><th>Location</th></tr>
+      <tr><td>1999</td><td>N/A</td><td></td><td></td><td></td></tr>
+      <tr><td>48552</td><td>4X1KS</td><td></td><td></td><td>Cloud Node</td></tr>
+      <tr><td><a href="?node=429730">429730</a></td><td>4X1DA</td><td>0</td><td></td><td>Modiin</td></tr>
+      <tr><td>43622</td><td>4X1KS</td><td>145.775</td><td></td><td>Hashmonaim</td></tr>
+      <tr><td>2000</td><td></td><td></td><td></td><td></td></tr>
+    </table>
+    <table>
+      <tr><th>Actual Uptime</th></tr>
+      <tr><td>1 day</td></tr>
+    </table>
+  `;
+
+  it('reads callsigns only from the Callsign column and drops hub/echo nodes', () => {
+    const parsed = parseNodeInfoCgi(html);
+    assert.equal(parsed.foundTable, true);
+    assert.deepEqual(
+      parsed.nodes.map((n) => ({ node: n.node, callsign: n.callsign })),
+      [
+        { node: '429730', callsign: '4X1DA' },
+        { node: '43622', callsign: '4X1KS' },
+      ]
+    );
+  });
+
+  it('does not invent callsigns from node numbers or other tables', () => {
+    const parsed = parseNodeInfoCgi(html);
+    assert.equal(parsed.nodes.some((n) => n.callsign === '1999' || n.callsign === '48552'), false);
+    assert.equal(parsed.nodes.some((n) => n.node === '2000'), false);
+  });
+
+  it('returns no nodes when the callsign table is missing', () => {
+    const parsed = parseNodeInfoCgi('<html><p>offline</p></html>');
+    assert.equal(parsed.foundTable, false);
+    assert.deepEqual(parsed.nodes, []);
   });
 });
