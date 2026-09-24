@@ -5,6 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import ExportReportsDialog from '@/components/ExportReportsDialog';
+import ManagersModal from '@/components/ManagersModal';
 import CallsignLink from '@/components/CallsignLink';
 import { getActiveNet } from '@/lib/nets';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
@@ -75,6 +76,7 @@ export default function NetManager({
   const { t } = useApp();
   const utcNow = useServerUtcNow();
   const [showCreate, setShowCreate] = useState(false);
+  const [showManagers, setShowManagers] = useState(false);
   const [netForm, setNetForm] = useState<NewNet>(emptyNet);
   const [creating, setCreating] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
@@ -212,6 +214,16 @@ export default function NetManager({
           {t('netManager')}
         </h2>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowManagers(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-teal-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-teal-500/25 transition hover:bg-teal-600 active:scale-95"
+            >
+              <Users className="h-4 w-4" />
+              {t('managersTitle')}
+            </button>
+          )}
           {isAdmin && (
             <button
               type="button"
@@ -613,6 +625,11 @@ export default function NetManager({
         </div>
       </div>
 
+      <ManagersModal
+        open={showManagers}
+        onClose={() => setShowManagers(false)}
+        isAdmin={!!isAdmin}
+      />
       <ExportReportsDialog
         open={showExportReports}
         today={today}

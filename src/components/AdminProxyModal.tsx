@@ -11,7 +11,12 @@ interface AdminProxyModalProps {
   open: boolean;
   onClose: () => void;
   liveNet: LiveNetSchedule | null;
-  onSubmit: (payload: NewCqSession) => Promise<{ error: boolean; selfReported?: boolean }>;
+  onSubmit: (payload: NewCqSession) => Promise<{
+    error: boolean;
+    selfReported?: boolean;
+    alreadyProxy?: boolean;
+    postedBy?: string;
+  }>;
 }
 
 const field =
@@ -129,7 +134,15 @@ export default function AdminProxyModal({ open, onClose, liveNet, onSubmit }: Ad
     const res = await onSubmit(payload);
     setSubmitting(false);
     if (res.selfReported) {
-      setError(t('adminProxySelfReported'));
+      setError(t('adminProxyAlreadyOnline').replace('[CALLSIGN]', cs));
+      return;
+    }
+    if (res.alreadyProxy) {
+      setError(
+        t('adminProxyAlreadyAdded')
+          .replace('[CALLSIGN]', cs)
+          .replace('[proxy_added_by]', res.postedBy || '')
+      );
       return;
     }
     if (res.error) {

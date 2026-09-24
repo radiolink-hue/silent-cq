@@ -32,6 +32,7 @@ import CatSettingsModal from '@/components/CatSettingsModal';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { getLiveNet } from '@/lib/liveNetSchedule';
 import { ADMIN_CALLSIGN } from '@/lib/adminProxy';
+import { isManagerOrAdmin } from '@/utils/managerCheck';
 import { Calendar, Shield } from 'lucide-react';
 
 export default function App() {
@@ -64,6 +65,7 @@ export default function App() {
   const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
   const [myCity, setMyCityState] = useState(savedProfile.city);
   const [myPower, setMyPowerState] = useState(savedProfile.power);
+  const [canPost, setCanPost] = useState(() => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN);
   const [myPos, setMyPosState] = useState<{ lat: number; lng: number } | null>(() => {
     const raw = localStorage.getItem('scq_pos');
     if (raw) {
@@ -146,6 +148,14 @@ export default function App() {
   };
 
   const dismissToast = (id: string) => setToasts((prev) => prev.filter((x) => x.id !== id));
+
+  useEffect(() => {
+    if (!myCallsign) {
+      setCanPost(false);
+      return;
+    }
+    void isManagerOrAdmin(myCallsign).then(setCanPost);
+  }, [myCallsign]);
 
   useEffect(() => {
     const profile = loadOperatorProfile();
@@ -293,7 +303,7 @@ export default function App() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 sm:mt-6">
-          {isAdmin && (
+          {canPost && (
             <button
               type="button"
               onClick={() => setShowAdminProxy(true)}
@@ -406,7 +416,7 @@ export default function App() {
         onClose={() => setShowAdminProxy(false)}
         liveNet={liveNet}
         onSubmit={async (payload) => {
-          const res = await createProxySession(payload);
+          const res = await createProxySession(payload, myCallsign);
           if (!res.error) {
             void reload();
             setTab('active');

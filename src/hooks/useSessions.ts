@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
-import { ADMIN_CALLSIGN, canReplaceWithProxy, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
+import { ADMIN_CALLSIGN, findProxyDuplicate, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
   return list.filter((s) => !isExpiredCqSession(s));
@@ -175,8 +175,9 @@ export function useSessions(pollWhenVisible = false) {
     return { error: false as const, session: data as CqSession };
   }, []);
 
-  const createProxySession = useCallback(async (payload: NewCqSession) => {
+  const createProxySession = useCallback(async (payload: NewCqSession, postedBy: string) => {
     const callsign = payload.callsign.trim().toUpperCase();
+    const addedBy = postedBy.trim().toUpperCase() || ADMIN_CALLSIGN;
     const row = withProxyRfFallback({ ...payload, callsign });
 
     const listed = await supabase
@@ -192,21 +193,22 @@ export function useSessions(pollWhenVisible = false) {
           !isExpiredCqSession(s)
       );
 
-    if (!canReplaceWithProxy(matches)) {
+    const duplicate = findProxyDuplicate(matches);
+    if (duplicate.kind === 'self') {
       return { error: true as const, selfReported: true as const };
     }
-
-    if (matches.length > 0) {
-      await supabase
-        .from('cq_sessions')
-        .update({ active: false })
-        .in('id', matches.map((s) => s.id));
+    if (duplicate.kind === 'proxy') {
+      return {
+        error: true as const,
+        alreadyProxy: true as const,
+        postedBy: duplicate.postedBy,
+      };
     }
 
     const proxyRow = {
       ...row,
       is_proxy: true,
-      proxy_added_by: ADMIN_CALLSIGN,
+      proxy_added_by: addedBy,
     };
 
     let { data, error: err } = await supabase
@@ -227,7 +229,7 @@ export function useSessions(pollWhenVisible = false) {
     const session = hydrateProxySession({
       ...(data as CqSession),
       is_proxy: true,
-      proxy_added_by: ADMIN_CALLSIGN,
+      proxy_added_by: addedBy,
     });
     setSessions((prev) => [
       session,
@@ -237,7 +239,7 @@ export function useSessions(pollWhenVisible = false) {
     await supabase.from('cq_events').insert({
       session_id: data.id,
       kind: 'new_cq' satisfies CqEventKind,
-      from_callsign: ADMIN_CALLSIGN,
+      from_callsign: addedBy,
       target_callsign: callsign,
       band: data.band,
       mode: data.mode,
