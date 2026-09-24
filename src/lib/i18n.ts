@@ -228,6 +228,18 @@ const dict: Dict = {
   adminBadge: { he: 'מנהל', en: 'Admin' },
   adminProxyTooltip: { he: 'נוסף על ידי המנהל — התחנה לא דיווחה בעצמה', en: 'Added by admin — station has not self-reported' },
   adminProxySelfReported: { he: 'תחנה זו כבר דיווחה בעצמה — לא ניתן להוסיף רשומת מנהל', en: 'This station has already self-reported — proxy entry not allowed' },
+  adminProxyAlreadyOnline: { he: '[CALLSIGN] כבר מקוון — דיווח עצמי', en: '[CALLSIGN] is already online — self-reported' },
+  adminProxyAlreadyAdded: { he: '[CALLSIGN] כבר נוסף על ידי [proxy_added_by]', en: '[CALLSIGN] was already added by [proxy_added_by]' },
+
+  managersTitle: { he: 'מנהלים', en: 'Managers' },
+  managerAdd: { he: 'הוסף מנהל', en: 'Add Manager' },
+  managerCallsignPlaceholder: { he: 'הזן אות קריאה', en: 'Enter callsign' },
+  managerEmpty: { he: 'עדיין לא שויכו מנהלים', en: 'No managers assigned yet' },
+  managerAlreadyExists: { he: 'אות קריאה זה כבר מנהל', en: 'That callsign is already a manager' },
+  managerCannotAddAdmin: { he: 'לא ניתן להוסיף את המנהל הראשי כמנהל', en: 'The admin cannot add himself as a manager' },
+  managerLimit: { he: 'ניתן לשייך עד 10 מנהלים', en: 'A maximum of 10 managers can be assigned' },
+  managerRemoveTitle: { he: 'הסר מנהל', en: 'Remove Manager' },
+  managerRemoveMsg: { he: 'להסיר את [callsign] כמנהל?', en: 'Remove [callsign] as Manager?' },
 };
 
 export function makeT(lang: Lang) {

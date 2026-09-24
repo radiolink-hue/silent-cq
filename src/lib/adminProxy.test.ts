@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { canReplaceWithProxy, hydrateProxySession, proxyRfDefaults, sessionIsProxy, withProxyRfFallback } from './adminProxy.ts';
+import { canReplaceWithProxy, findProxyDuplicate, hydrateProxySession, proxyRfDefaults, sessionIsProxy, withProxyRfFallback } from './adminProxy.ts';
 
 describe('canReplaceWithProxy', () => {
   it('allows a first proxy post', () => {
@@ -40,6 +40,27 @@ describe('proxyRfDefaults', () => {
     assert.equal(filled.frequency, '7.165');
     assert.equal(filled.mode, 'LSB');
     assert.equal(filled.callsign, '4X1AA');
+  });
+});
+
+describe('findProxyDuplicate', () => {
+  it('allows a new proxy when the callsign is not online', () => {
+    assert.deepEqual(findProxyDuplicate([]), { kind: 'none' });
+  });
+
+  it('warns when a proxy already posted the station', () => {
+    assert.deepEqual(
+      findProxyDuplicate([{ is_proxy: true, proxy_added_by: '4X1BB' }]),
+      { kind: 'proxy', postedBy: '4X1BB' }
+    );
+  });
+
+  it('warns when the station already self-reported', () => {
+    assert.deepEqual(findProxyDuplicate([{ is_proxy: false }]), { kind: 'self' });
+    assert.equal(
+      findProxyDuplicate([{ is_proxy: true, proxy_added_by: '4X1DA' }, { is_proxy: false }]).kind,
+      'self'
+    );
   });
 });
 

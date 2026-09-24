@@ -36,6 +36,24 @@ export function canReplaceWithProxy(
   return !existing.some((row) => row.is_proxy !== true);
 }
 
+export type ProxyDuplicate =
+  | { kind: 'none' }
+  | { kind: 'self' }
+  | { kind: 'proxy'; postedBy: string };
+
+/** Warn instead of posting when the callsign is already in the active session. */
+export function findProxyDuplicate(
+  existing: { is_proxy?: boolean | null; proxy_added_by?: string | null }[]
+): ProxyDuplicate {
+  if (existing.length === 0) return { kind: 'none' };
+  const self = existing.find((row) => row.is_proxy !== true);
+  if (self) return { kind: 'self' };
+  const postedBy =
+    existing.find((row) => row.proxy_added_by?.trim())?.proxy_added_by?.trim() ||
+    ADMIN_CALLSIGN;
+  return { kind: 'proxy', postedBy };
+}
+
 function truthyProxyFlag(value: unknown): boolean | null {
   if (value === true || value === 1 || value === '1' || value === 'true' || value === 't') return true;
   if (value === false || value === 0 || value === '0' || value === 'false' || value === 'f') return false;
