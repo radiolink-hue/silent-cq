@@ -221,7 +221,7 @@ export default function NetManager({
               className="inline-flex items-center gap-1.5 rounded-full bg-teal-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-teal-500/25 transition hover:bg-teal-600 active:scale-95"
             >
               <Users className="h-4 w-4" />
-              {t('managersTitle')}
+              Managers
             </button>
           )}
           {isAdmin && (
