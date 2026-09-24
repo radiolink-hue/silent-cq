@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { ADMIN_CALLSIGN } from '@/lib/adminProxy';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { formatJerusalemDateTime } from '@/lib/netTime';
 
 interface ManagerRow {
   id: string;
@@ -141,7 +142,7 @@ export default function ManagersModal({ open, onClose, isAdmin }: ManagersModalP
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-teal-500 px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-500/25 transition hover:bg-teal-600 disabled:opacity-70"
               >
                 {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                {t('managerAdd')}
+                Add
               </button>
             </form>
           )}
@@ -161,9 +162,16 @@ export default function ManagersModal({ open, onClose, isAdmin }: ManagersModalP
                   key={m.id}
                   className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 dark:bg-white/5"
                 >
-                  <span className="flex items-center gap-2 font-mono font-bold">
-                    <Shield className="h-4 w-4 text-teal-500" />
-                    {m.callsign}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="flex items-center gap-2 font-mono font-bold">
+                      <Shield className="h-4 w-4 shrink-0 text-teal-500" />
+                      {m.callsign}
+                    </span>
+                    {m.added_at && (
+                      <span className="ps-6 text-[11px] font-medium text-slate-400">
+                        {formatJerusalemDateTime(m.added_at)}
+                      </span>
+                    )}
                   </span>
                   {isAdmin && (
                     <button

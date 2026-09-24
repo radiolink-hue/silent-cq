@@ -303,7 +303,7 @@ export default function App() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 sm:mt-6">
-          {canPost && (
+          {canPost && (tab === 'active' || tab === 'call') && (
             <button
               type="button"
               onClick={() => setShowAdminProxy(true)}
