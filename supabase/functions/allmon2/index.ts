@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { parseAllmon2, shouldDropAllstarNode, type ParsedNode } from "./filter.ts";
+import { parseNodeInfoCgi, shouldDropAllstarNode, type ParsedNode } from "./filter.ts";
 import {
   ALLSTAR_GPS_SOURCE,
   mergeAllstarGps,
@@ -15,12 +15,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const ALLMON_URL = "http://140.82.58.13/allmon2/link.php?nodes=48552";
 const NODE_ID = "48552";
 const SOURCE_TAG = `allmon2_${NODE_ID}`;
+const NODEINFO_URL = `https://stats.allstarlink.org/nodeinfo.cgi?node=${NODE_ID}`;
 const COMMENT_TAG = "Auto-ingested from Allmon2 Node 48552";
-const BAND = "Allstar / VoIPC";
-const MODE = "FM / Digital Node";
+const BAND = "70cm";
+const FREQUENCY = "430.9";
+const MODE = "FM";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const USER_AGENT = "SilentCQ-Monitor/1.0";
 /** JSON behind nodeinfo.cgi / the networkMap bubble image (JPEG). */
@@ -291,11 +292,21 @@ async function handleCallsignLookup(
   });
 }
 
-const MOCK_NODES: ParsedNode[] = [
-  { node: "429730", callsign: "4X1DA", transmitting: true },
-  { node: "48400", callsign: "4Z4DX", transmitting: false },
-  { node: "48301", callsign: "4X1ABC", transmitting: false },
-];
+function emptyIngestResponse(status: "error" | "idle", message: string, extra: Record<string, unknown> = {}) {
+  return new Response(
+    JSON.stringify({
+      status,
+      node: NODE_ID,
+      nodes: [],
+      transmittingNode: null,
+      error: status === "error" ? message : null,
+      upserted: 0,
+      message,
+      ...extra,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -308,17 +319,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // If a callsign query param is present, handle geocache lookup
     const url = new URL(req.url);
     if (url.searchParams.has("callsign")) {
       return await handleCallsignLookup(req, supabase);
     }
 
-    // Check if we're in the Thursday Allstar net window
     const inWindow = isAllstarNetActive();
 
     if (!inWindow) {
-      // Outside ingestion window — deactivate stale allstar sessions and return idle
       await supabase
         .from("cq_sessions")
         .update({ active: false })
@@ -326,53 +334,36 @@ Deno.serve(async (req: Request) => {
         .not("allstar_source", "is", null)
         .eq("active", true);
 
-      return new Response(
-        JSON.stringify({
-          status: "idle",
-          node: NODE_ID,
-          nodes: [],
-          transmittingNode: null,
-          error: null,
-          upserted: 0,
-          message: "Outside Allstar net ingestion window (Thursday 19:25–20:30 IST)",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      return emptyIngestResponse(
+        "idle",
+        "Outside Allstar net ingestion window (Thursday 19:25–20:30 IST)",
       );
     }
 
     let html = "";
-    let live = false;
-    let fetchError: string | null = null;
-
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      const resp = await fetch(ALLMON_URL, {
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const resp = await fetch(NODEINFO_URL, {
         signal: controller.signal,
         headers: { "User-Agent": USER_AGENT },
       });
       clearTimeout(timeout);
-      if (resp.ok) {
-        html = await resp.text();
-        live = true;
-      } else {
-        fetchError = `HTTP ${resp.status}`;
+      if (!resp.ok) {
+        console.error(`AllStar nodeinfo fetch failed: HTTP ${resp.status}`);
+        return emptyIngestResponse("error", `HTTP ${resp.status}`);
       }
+      html = await resp.text();
     } catch (e) {
-      fetchError = e instanceof Error ? e.message : "fetch failed";
+      const msg = e instanceof Error ? e.message : "fetch failed";
+      console.error("AllStar nodeinfo fetch failed:", msg);
+      return emptyIngestResponse("error", msg);
     }
 
-    let parsed: { nodes: ParsedNode[]; transmittingNode: string | null };
-
-    if (live && html) {
-      parsed = parseAllmon2(html);
-      if (parsed.nodes.length === 0) {
-        parsed = { nodes: MOCK_NODES, transmittingNode: "429730" };
-        live = false;
-      }
-    } else {
-      parsed = { nodes: MOCK_NODES, transmittingNode: "429730" };
-      live = false;
+    const parsed = parseNodeInfoCgi(html);
+    if (!parsed.foundTable) {
+      console.error("AllStar nodeinfo: unexpected page, no Node/Callsign table");
+      return emptyIngestResponse("error", "unexpected nodeinfo page");
     }
 
     const gpsByNode = await fetchAllstarGpsByNode(parsed.nodes.map((n) => n.node));
@@ -380,20 +371,35 @@ Deno.serve(async (req: Request) => {
     const { data: existing } = await supabase
       .from("cq_sessions")
       .select("id, callsign, allstar_source")
-      .eq("active", true)
-      .not("allstar_source", "is", null)
-      .neq("allstar_source", "");
+      .eq("active", true);
 
-    const existingNodes = new Map<string, string>();
-    for (const row of (existing ?? []) as { id: string; callsign: string; allstar_source: string }[]) {
-      existingNodes.set(row.allstar_source, row.id);
+    const existingRows = (existing ?? []) as { id: string; callsign: string; allstar_source: string | null }[];
+    const activeByCallsign = new Map<string, { id: string; callsign: string; allstar_source: string | null }>();
+    for (const row of existingRows) {
+      const key = row.callsign.trim().toUpperCase();
+      if (!key) continue;
+      const prev = activeByCallsign.get(key);
+      if (!prev) {
+        activeByCallsign.set(key, row);
+        continue;
+      }
+      const prevIsAllstar = Boolean(prev.allstar_source);
+      const rowIsAllstar = Boolean(row.allstar_source);
+      if (prevIsAllstar && !rowIsAllstar) {
+        await supabase.from("cq_sessions").update({ active: false }).eq("id", prev.id);
+        activeByCallsign.set(key, row);
+      } else if (prevIsAllstar && rowIsAllstar && prev.id !== row.id) {
+        await supabase.from("cq_sessions").update({ active: false }).eq("id", row.id);
+      }
     }
 
-    const staleSources = new Set(existingNodes.keys());
+    const liveCallsigns = new Set(parsed.nodes.map((n) => n.callsign.trim().toUpperCase()));
+
     const upserts: {
       callsign: string;
       band: string;
       mode: string;
+      frequency: string;
       comments: string;
       allstar_source: string;
       active: boolean;
@@ -406,35 +412,16 @@ Deno.serve(async (req: Request) => {
 
     for (const node of parsed.nodes) {
       if (shouldDropAllstarNode(node.node, node.callsign, node.callsign)) continue;
+      const cs = node.callsign.trim().toUpperCase();
+      if (!cs) continue;
+      if (activeByCallsign.has(cs)) continue;
 
       const sourceKey = `${SOURCE_TAG}:${node.node}`;
-      staleSources.delete(sourceKey);
-
-      const sessionId = existingNodes.get(sourceKey);
-      if (sessionId) {
-        const gps = gpsByNode.get(node.node);
-        if (gps) {
-          const geo = gpsToGeo(gps);
-          await upsertGeocache(supabase, node.callsign, geo);
-          await supabase
-            .from("cq_sessions")
-            .update({
-              gridsquare: geo.gridsquare,
-              lat: geo.lat,
-              lng: geo.lng,
-              city: geo.city || undefined,
-              country: geo.country || undefined,
-            })
-            .eq("id", sessionId);
-        }
-        continue;
-      }
-
       const geo = await resolveNodeGeo(supabase, node, gpsByNode);
-
       upserts.push({
-        callsign: node.callsign,
+        callsign: cs,
         band: BAND,
+        frequency: FREQUENCY,
         mode: MODE,
         comments: COMMENT_TAG,
         allstar_source: sourceKey,
@@ -445,83 +432,47 @@ Deno.serve(async (req: Request) => {
         city: geo?.city ?? "",
         country: geo?.country ?? "",
       });
+      activeByCallsign.set(cs, { id: "", callsign: cs, allstar_source: sourceKey });
     }
 
     if (upserts.length > 0) {
-      await supabase.from("cq_sessions").insert(upserts);
-    }
-
-    for (const staleKey of staleSources) {
-      const sessionId = existingNodes.get(staleKey);
-      if (sessionId) {
-        await supabase.from("cq_sessions").update({ active: false }).eq("id", sessionId);
+      const { error: insertErr } = await supabase.from("cq_sessions").insert(upserts);
+      if (insertErr) {
+        console.error("AllStar ingest insert failed:", insertErr.message);
       }
     }
 
-    if (parsed.transmittingNode) {
-      const txSourceKey = `${SOURCE_TAG}:${parsed.transmittingNode}`;
-      const existingArr = (existing ?? []) as { id: string; callsign: string; allstar_source: string }[];
-      const txRow = existingArr.find((r) => r.allstar_source === txSourceKey);
-
-      if (txRow) {
-        await supabase
-          .from("cq_sessions")
-          .update({ created_at: new Date().toISOString() })
-          .eq("id", txRow.id);
-      } else {
-        const txNode = parsed.nodes.find((n) => n.node === parsed.transmittingNode);
-        if (txNode && !shouldDropAllstarNode(txNode.node, txNode.callsign, txNode.callsign)) {
-          const { data: checkRow } = await supabase
-            .from("cq_sessions")
-            .select("id")
-            .eq("active", true)
-            .eq("allstar_source", txSourceKey)
-            .maybeSingle();
-          if (!checkRow) {
-            const geo = await resolveNodeGeo(supabase, txNode, gpsByNode);
-            await supabase.from("cq_sessions").insert({
-              callsign: txNode.callsign,
-              band: BAND,
-              mode: MODE,
-              comments: COMMENT_TAG,
-              allstar_source: txSourceKey,
-              active: true,
-              gridsquare: geo?.gridsquare ?? "",
-              lat: geo?.lat ?? null,
-              lng: geo?.lng ?? null,
-              city: geo?.city ?? "",
-              country: geo?.country ?? "",
-            });
-          } else {
-            await supabase
-              .from("cq_sessions")
-              .update({ created_at: new Date().toISOString() })
-              .eq("id", (checkRow as { id: string }).id);
-          }
-        }
+    for (const row of existingRows) {
+      if (!row.allstar_source) continue;
+      const key = row.callsign.trim().toUpperCase();
+      if (!liveCallsigns.has(key)) {
+        await supabase.from("cq_sessions").update({ active: false }).eq("id", row.id);
       }
     }
 
     return new Response(
       JSON.stringify({
-        status: live ? "live" : "fallback",
+        status: "live",
         node: NODE_ID,
         nodes: parsed.nodes,
-        transmittingNode: parsed.transmittingNode,
-        error: fetchError,
+        transmittingNode: null,
+        error: null,
         upserted: upserts.length,
         gpsNodes: gpsByNode.size,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown error";
+    console.error("AllStar ingest error:", msg);
     return new Response(
       JSON.stringify({
         status: "error",
         node: NODE_ID,
-        nodes: MOCK_NODES,
-        transmittingNode: "48552",
-        error: err instanceof Error ? err.message : "unknown error",
+        nodes: [],
+        transmittingNode: null,
+        error: msg,
+        upserted: 0,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
