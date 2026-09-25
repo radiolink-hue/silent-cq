@@ -150,9 +150,25 @@ export function useSessions(pollWhenVisible = false) {
       await supabase.from('cq_sessions').update({ active: false }).in('id', ids);
     }
 
+    // Regular Call Silent CQ: never send proxy/manager/allstar columns.
+    const row = {
+      callsign: payload.callsign,
+      gridsquare: payload.gridsquare,
+      band: payload.band,
+      mode: payload.mode,
+      frequency: payload.frequency,
+      power: payload.power,
+      antenna: payload.antenna,
+      city: payload.city,
+      country: payload.country ?? '',
+      comments: payload.comments ?? '',
+      lat: payload.lat ?? null,
+      lng: payload.lng ?? null,
+    };
+
     const { data, error: err } = await supabase
       .from('cq_sessions')
-      .insert({ ...payload, allstar_source: null })
+      .insert(row)
       .select()
       .maybeSingle();
     if (err || !data) return { error: true as const };
