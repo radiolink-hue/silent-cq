@@ -1,14 +1,19 @@
 import { supabase } from '@/lib/supabase';
 import { ADMIN_CALLSIGN } from '@/lib/adminProxy';
 
+/** Admin Posted / privilege flags only — never gate Call Silent CQ. */
 export async function isManagerOrAdmin(callsign: string): Promise<boolean> {
-  if (callsign.trim().toUpperCase() === ADMIN_CALLSIGN) return true;
+  const cs = callsign.trim().toUpperCase();
+  if (cs === ADMIN_CALLSIGN) return true;
 
-  const { data, error } = await supabase
-    .from('managers')
-    .select('callsign')
-    .eq('callsign', callsign.trim().toUpperCase())
-    .maybeSingle();
-
-  return !error && !!data;
+  try {
+    const { data, error } = await supabase
+      .from('managers')
+      .select('callsign')
+      .eq('callsign', cs)
+      .maybeSingle();
+    return !error && !!data;
+  } catch {
+    return false;
+  }
 }
