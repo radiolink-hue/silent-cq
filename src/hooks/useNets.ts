@@ -243,7 +243,7 @@ export function useNets() {
     // Get all active session IDs
     const { data: sessions, error: sessionsError } = await supabase
       .from('cq_sessions')
-      .select('id, callsign, active, created_at, band, mode, frequency, allstar_source')
+      .select('id, callsign, active, created_at, band, mode, frequency')
       .eq('active', true);
     if (sessionsError) return;
 

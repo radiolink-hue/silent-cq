@@ -14,7 +14,6 @@ import { useApp } from '@/context/AppContext';
 import { useSessions } from '@/hooks/useSessions';
 import { useNets } from '@/hooks/useNets';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useAllstarMonitor } from '@/hooks/useAllstarMonitor';
 import { useCatControl, type CatTelemetry } from '@/hooks/useCatControl';
 import Header from '@/components/Header';
 import TabBar, { Tab } from '@/components/TabBar';
@@ -53,7 +52,6 @@ export default function App() {
   } = useSessions(tab === 'active');
   const nets = useNets();
   const { permission, requestPermission, alert } = useNotifications();
-  const { status: allmonStatus } = useAllstarMonitor();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CqSession | null>(null);
   const [showTodaysReport, setShowTodaysReport] = useState(false);
@@ -65,7 +63,9 @@ export default function App() {
   const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
   const [myCity, setMyCityState] = useState(savedProfile.city);
   const [myPower, setMyPowerState] = useState(savedProfile.power);
-  const [canPost, setCanPost] = useState(() => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN);
+  const [showAdminPosted, setShowAdminPosted] = useState(
+    () => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN
+  );
   const [myPos, setMyPosState] = useState<{ lat: number; lng: number } | null>(() => {
     const raw = localStorage.getItem('scq_pos');
     if (raw) {
@@ -151,10 +151,11 @@ export default function App() {
 
   useEffect(() => {
     if (!myCallsign) {
-      setCanPost(false);
+      setShowAdminPosted(false);
       return;
     }
-    void isManagerOrAdmin(myCallsign).then(setCanPost);
+    // Admin Posted button only — never used by Call Silent CQ submit.
+    void isManagerOrAdmin(myCallsign).then(setShowAdminPosted);
   }, [myCallsign]);
 
   useEffect(() => {
@@ -228,6 +229,7 @@ export default function App() {
       const coords = gridToLatLng(grid);
       if (coords) setMyPos(coords);
     }
+    // Any logged-in callsign can publish a Silent CQ. Do not consult isManagerOrAdmin.
     const res = await createSession(payload);
     return { error: res.error };
   };
@@ -282,15 +284,11 @@ export default function App() {
     );
   }
 
-  const connectedCallsigns = sessions.map((s) => s.callsign);
-
   return (
     <div className="app-bg min-h-screen pb-page-nav sm:pb-10">
       <Header
         notifPermission={permission}
         onEnableNotifications={requestPermission}
-        connectedCallsigns={connectedCallsigns}
-        allmonStatus={allmonStatus}
         catConnected={cat.connected}
         catFrequency={cat.telemetry?.frequency}
         onOpenCatSettings={() => setShowCatSettings(true)}
@@ -303,7 +301,7 @@ export default function App() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 sm:mt-6">
-          {canPost && (tab === 'active' || tab === 'call') && (
+          {showAdminPosted && (tab === 'active' || tab === 'call') && (
             <button
               type="button"
               onClick={() => setShowAdminProxy(true)}
