@@ -1,23 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radio, Sun, Moon, Share2, MessageCircle, Send, Link2, Check, Bell, BellRing, Activity } from 'lucide-react';
+import { Radio, Sun, Moon, Share2, MessageCircle, Send, Link2, Check, Bell, BellRing } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import Toggle from '@/components/Toggle';
-import type { AllmonStatus } from '@/hooks/useAllstarMonitor';
 import type { LiveNetSchedule } from '@/lib/liveNetSchedule';
 import ActiveNetBanner from '@/components/ActiveNetBanner';
 
 interface HeaderProps {
   notifPermission: NotificationPermission;
   onEnableNotifications: () => void;
-  connectedCallsigns: string[];
-  allmonStatus: AllmonStatus;
   catConnected: boolean;
   catFrequency?: string;
   onOpenCatSettings: () => void;
   liveNet: LiveNetSchedule | null;
 }
 
-export default function Header({ notifPermission, onEnableNotifications, connectedCallsigns, allmonStatus, catConnected, catFrequency, onOpenCatSettings, liveNet }: HeaderProps) {
+export default function Header({ notifPermission, onEnableNotifications, catConnected, catFrequency, onOpenCatSettings, liveNet }: HeaderProps) {
   const { t, lang, toggleLang, theme, toggleTheme } = useApp();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -71,48 +68,6 @@ export default function Header({ notifPermission, onEnableNotifications, connect
         </div>
 
         <div className="flex max-w-full flex-wrap items-center justify-end gap-1 max-[420px]:w-full sm:ms-auto sm:gap-2">
-          {connectedCallsigns.length > 0 && (
-            <div className="hidden max-w-[200px] truncate text-xs font-semibold text-slate-500 dark:text-slate-400 lg:block">
-              {t('connectedStations')}: {connectedCallsigns.join(', ')}
-            </div>
-          )}
-
-          <div
-            className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition sm:inline-flex"
-            style={{
-              background:
-                allmonStatus === 'live'
-                  ? 'rgba(16,185,129,0.15)'
-                  : allmonStatus === 'fallback'
-                    ? 'rgba(245,158,11,0.15)'
-                    : 'rgba(100,116,139,0.15)',
-              color:
-                allmonStatus === 'live'
-                  ? '#059669'
-                  : allmonStatus === 'fallback'
-                    ? '#d97706'
-                    : '#64748b',
-            }}
-            title={
-              allmonStatus === 'live'
-                ? t('allmonLive')
-                : allmonStatus === 'fallback'
-                  ? t('allmonFallback')
-                  : t('allmonIdle')
-            }
-          >
-            <Activity
-              className={`h-3.5 w-3.5 ${allmonStatus === 'live' ? 'animate-pulse' : ''}`}
-            />
-            <span className="hidden lg:inline">
-              {allmonStatus === 'live'
-                ? t('allmonLive')
-                : allmonStatus === 'fallback'
-                  ? t('allmonFallback')
-                  : t('allmonIdle')}
-            </span>
-          </div>
-
           <button
             type="button"
             onClick={onEnableNotifications}

@@ -150,7 +150,7 @@ export function useSessions(pollWhenVisible = false) {
       await supabase.from('cq_sessions').update({ active: false }).in('id', ids);
     }
 
-    // Regular Call Silent CQ: never send proxy/manager/allstar columns.
+    // Regular Call Silent CQ: never send proxy or AllStar columns.
     const row = {
       callsign: payload.callsign,
       gridsquare: payload.gridsquare,

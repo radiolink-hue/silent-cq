@@ -11,8 +11,8 @@ export function isExpiredCqSession(
 }
 
 /**
- * A station is visible to nets only if it has a live published Silent CQ
- * (or an AllStar-sourced check-in). Callsign/grid/city from login alone is not enough.
+ * A station is visible to nets only if it has a live published Silent CQ.
+ * Callsign/grid/city from login alone is not enough.
  */
 export function isLiveSilentCqPost(
   session: {
@@ -22,7 +22,6 @@ export function isLiveSilentCqPost(
     band?: string | null;
     mode?: string | null;
     frequency?: string | null;
-    allstar_source?: string | null;
   },
   now: number = Date.now()
 ): boolean {
@@ -33,9 +32,8 @@ export function isLiveSilentCqPost(
   const band = (session.band ?? '').trim();
   const mode = (session.mode ?? '').trim();
   const frequency = (session.frequency ?? '').trim();
-  const allstar = (session.allstar_source ?? '').trim();
 
-  return Boolean(frequency || allstar || (band && mode));
+  return Boolean(frequency || (band && mode));
 }
 
 export function liveSilentCqCallsigns(

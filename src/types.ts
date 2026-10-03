@@ -15,7 +15,6 @@ export interface CqSession {
   heard_count: number;
   active: boolean;
   created_at: string;
-  allstar_source?: string;
   is_proxy?: boolean;
   proxy_added_by?: string | null;
 }

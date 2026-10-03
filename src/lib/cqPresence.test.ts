@@ -42,7 +42,7 @@ describe('isLiveSilentCqPost', () => {
   it('rejects login-only stubs with no operating parameters', () => {
     assert.equal(
       isLiveSilentCqPost(
-        session({ band: '', mode: '', frequency: '', allstar_source: '' }),
+        session({ band: '', mode: '', frequency: '' }),
         now
       ),
       false
@@ -59,15 +59,6 @@ describe('isLiveSilentCqPost', () => {
     );
   });
 
-  it('accepts AllStar-sourced check-ins without a frequency', () => {
-    assert.equal(
-      isLiveSilentCqPost(
-        session({ frequency: '', allstar_source: 'allmon2:48552' }),
-        now
-      ),
-      true
-    );
-  });
 });
 
 describe('planNetParticipantSync', () => {

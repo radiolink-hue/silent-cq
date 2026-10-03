@@ -14,7 +14,6 @@ import { useApp } from '@/context/AppContext';
 import { useSessions } from '@/hooks/useSessions';
 import { useNets } from '@/hooks/useNets';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useAllstarMonitor } from '@/hooks/useAllstarMonitor';
 import { useCatControl, type CatTelemetry } from '@/hooks/useCatControl';
 import Header from '@/components/Header';
 import TabBar, { Tab } from '@/components/TabBar';
@@ -53,7 +52,6 @@ export default function App() {
   } = useSessions(tab === 'active');
   const nets = useNets();
   const { permission, requestPermission, alert } = useNotifications();
-  const { status: allmonStatus } = useAllstarMonitor();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CqSession | null>(null);
   const [showTodaysReport, setShowTodaysReport] = useState(false);
@@ -286,15 +284,11 @@ export default function App() {
     );
   }
 
-  const connectedCallsigns = sessions.map((s) => s.callsign);
-
   return (
     <div className="app-bg min-h-screen pb-page-nav sm:pb-10">
       <Header
         notifPermission={permission}
         onEnableNotifications={requestPermission}
-        connectedCallsigns={connectedCallsigns}
-        allmonStatus={allmonStatus}
         catConnected={cat.connected}
         catFrequency={cat.telemetry?.frequency}
         onOpenCatSettings={() => setShowCatSettings(true)}
