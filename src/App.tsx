@@ -65,7 +65,9 @@ export default function App() {
   const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
   const [myCity, setMyCityState] = useState(savedProfile.city);
   const [myPower, setMyPowerState] = useState(savedProfile.power);
-  const [canPost, setCanPost] = useState(() => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN);
+  const [showAdminPosted, setShowAdminPosted] = useState(
+    () => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN
+  );
   const [myPos, setMyPosState] = useState<{ lat: number; lng: number } | null>(() => {
     const raw = localStorage.getItem('scq_pos');
     if (raw) {
@@ -151,10 +153,11 @@ export default function App() {
 
   useEffect(() => {
     if (!myCallsign) {
-      setCanPost(false);
+      setShowAdminPosted(false);
       return;
     }
-    void isManagerOrAdmin(myCallsign).then(setCanPost);
+    // Admin Posted button only — never used by Call Silent CQ submit.
+    void isManagerOrAdmin(myCallsign).then(setShowAdminPosted);
   }, [myCallsign]);
 
   useEffect(() => {
@@ -228,6 +231,7 @@ export default function App() {
       const coords = gridToLatLng(grid);
       if (coords) setMyPos(coords);
     }
+    // Any logged-in callsign can publish a Silent CQ. Do not consult isManagerOrAdmin.
     const res = await createSession(payload);
     return { error: res.error };
   };
@@ -303,7 +307,7 @@ export default function App() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 sm:mt-6">
-          {canPost && (tab === 'active' || tab === 'call') && (
+          {showAdminPosted && (tab === 'active' || tab === 'call') && (
             <button
               type="button"
               onClick={() => setShowAdminProxy(true)}
