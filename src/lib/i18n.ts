@@ -3,8 +3,11 @@ export type Lang = 'he' | 'en';
 type Dict = Record<string, { he: string; en: string }>;
 
 const dict: Dict = {
+  appTagline: { 
+    he: 'Self-Spotting & Live Signal Reporting for Ham Radio', 
+    en: 'Self-Spotting & Live Signal Reporting for Ham Radio' 
+  },
   appTitle: { he: 'SILENT CQ', en: 'SILENT CQ' },
-  appTagline: { he: '| קריאת CQ שקטה לחובבי רדיו |', en: '| Silent CQ for Ham Radio |' },
 
   tabActive: { he: 'תחנות פעילות', en: 'Active Users' },
   tabMap: { he: 'מפה', en: 'Map View' },
