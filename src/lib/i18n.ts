@@ -4,7 +4,7 @@ type Dict = Record<string, { he: string; en: string }>;
 
 const dict: Dict = {
   appTitle: { he: 'SILENT CQ', en: 'SILENT CQ' },
-  appTagline: { he: '| קריאת CQ שקטה לחובבי רדיו |', en: '| Silent CQ for Ham Radio |' },
+  appTagline: { he: '| קריאת CQ שקטה לחובבי רדיו |', en: '| Self-Spotting & Live Signal Reporting for Ham Radio Nets |' },
 
   tabActive: { he: 'תחנות פעילות', en: 'Active Users' },
   tabMap: { he: 'מפה', en: 'Map View' },

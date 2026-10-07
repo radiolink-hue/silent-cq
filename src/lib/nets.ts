@@ -28,8 +28,8 @@ export const NET_SCHEDULES: NetSchedule[] = [
     name: 'Daily Roundtable Net',
     nameHe: 'שולחן עגול 40/60/80/6',
     dayOfWeek: -1, // daily
-    startHour: 18,
-    startMinute: 0,
+    startHour: 17,
+    startMinute: 25,
     endHour: 19,
     endMinute: 15,
     band: '40m',
