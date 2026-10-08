@@ -63,7 +63,7 @@ export default function Header({ notifPermission, onEnableNotifications, catConn
             <h1 className="truncate text-base font-bold leading-tight sm:text-xl">
               {t('appTitle')}
             </h1>
-            <p className="hidden truncate text-xs text-slate-500 dark:text-slate-400 min-[380px]:block">{t('appTagline')}</p>
+            <p className="text-pretty text-xs leading-snug text-slate-500 dark:text-slate-400">{t('appTagline')}</p>
           </div>
         </div>
 

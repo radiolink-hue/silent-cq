@@ -24,7 +24,7 @@ export const LIVE_NET_SCHEDULES: LiveNetSchedule[] = [
     name: 'Daily Roundtable Net',
     nameHe: 'השולחן העגול',
     dayOfWeek: -1,
-    startHour: 18,
+    startHour: 17,
     startMinute: 25,
     endHour: 19,
     endMinute: 15,

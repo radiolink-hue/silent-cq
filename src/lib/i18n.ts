@@ -4,8 +4,8 @@ type Dict = Record<string, { he: string; en: string }>;
 
 const dict: Dict = {
   appTagline: { 
-    he: 'Self-Spotting & Live Signal Reporting for Ham Radio', 
-    en: 'Self-Spotting & Live Signal Reporting for Ham Radio' 
+    he: 'Self-Spotting & Live Signal Reporting for Ham Radio Nets', 
+    en: 'Self-Spotting & Live Signal Reporting for Ham Radio Nets' 
   },
   appTitle: { he: 'SILENT CQ', en: 'SILENT CQ' },
 

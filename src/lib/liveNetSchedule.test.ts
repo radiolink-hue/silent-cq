@@ -3,11 +3,13 @@ import { describe, it } from 'node:test';
 import { getLiveNet } from './liveNetSchedule.ts';
 
 describe('live net detection (Asia/Jerusalem)', () => {
-  it('opens the daily roundtable at 18:25 Israel, not 18:00', () => {
-    assert.equal(getLiveNet(new Date('2026-01-15T16:00:00.000Z')), null);
-    assert.equal(getLiveNet(new Date('2026-01-15T16:24:00.000Z')), null);
-    assert.equal(getLiveNet(new Date('2026-01-15T16:25:00.000Z'))?.id, 'roundtable');
-    assert.equal(getLiveNet(new Date('2026-07-15T15:25:00.000Z'))?.id, 'roundtable');
+  it('opens the daily roundtable at 17:25 Israel in winter and summer', () => {
+    assert.equal(getLiveNet(new Date('2026-01-15T15:24:00.000Z')), null);
+    assert.equal(getLiveNet(new Date('2026-01-15T15:25:00.000Z'))?.id, 'roundtable');
+    assert.equal(getLiveNet(new Date('2026-01-15T17:15:00.000Z'))?.id, 'roundtable');
+    assert.equal(getLiveNet(new Date('2026-01-15T17:16:00.000Z')), null);
+    assert.equal(getLiveNet(new Date('2026-07-15T14:24:00.000Z')), null);
+    assert.equal(getLiveNet(new Date('2026-07-15T14:25:00.000Z'))?.id, 'roundtable');
     assert.equal(getLiveNet(new Date('2026-07-15T16:15:00.000Z'))?.id, 'roundtable');
     assert.equal(getLiveNet(new Date('2026-07-15T16:16:00.000Z')), null);
   });
