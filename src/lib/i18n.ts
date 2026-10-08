@@ -3,8 +3,11 @@ export type Lang = 'he' | 'en';
 type Dict = Record<string, { he: string; en: string }>;
 
 const dict: Dict = {
+  appTagline: { 
+    he: 'Self-Spotting & Live Signal Reporting for Ham Radio Nets', 
+    en: 'Self-Spotting & Live Signal Reporting for Ham Radio Nets' 
+  },
   appTitle: { he: 'SILENT CQ', en: 'SILENT CQ' },
-  appTagline: { he: '| קריאת CQ שקטה לחובבי רדיו |', en: '| Self-Spotting & Live Signal Reporting for Ham Radio Nets |' },
 
   tabActive: { he: 'תחנות פעילות', en: 'Active Users' },
   tabMap: { he: 'מפה', en: 'Map View' },
@@ -93,8 +96,6 @@ const dict: Dict = {
   connectRadioYes: { he: 'כן, חבר מכשיר', en: 'Yes, connect radio' },
   connectRadioNo: { he: 'לא, המשך', en: 'No, continue' },
 
-  connectedStations: { he: 'תחנות מחוברות', en: 'Connected' },
-
   todaysReport: { he: "דוח היום", en: "TODAY's REPORT" },
   todaysReportTitle: { he: 'דוח 24 השעות האחרונות', en: 'Last 24 Hours Report' },
   todaysReportEmpty: { he: 'אין תחנות היום', en: 'No stations today' },
@@ -172,14 +173,8 @@ const dict: Dict = {
   exportZipError: { he: 'ייצוא ה-ZIP נכשל', en: 'Failed to export ZIP' },
   exportZipEmpty: { he: 'אין רשתות בטווח וסינון שנבחרו', en: 'No net sessions match the selected dates and nets' },
 
-  allmonLive: { he: 'Allmon2 Node 48552: סנכרון חי', en: 'Allmon2 Node 48552: Live Syncing' },
-  allmonFallback: { he: 'Allmon2 Node 48552: נתוני גיבוי', en: 'Allmon2 Node 48552: Fallback Data' },
-  allmonError: { he: 'Allmon2 Node 48552: שגיאה', en: 'Allmon2 Node 48552: Error' },
-  allmonIdle: { he: 'Allmon2 Node 48552: ממתין', en: 'Allmon2 Node 48552: Idle' },
-
   qrzName: { he: 'שם', en: 'Name' },
   qrzViewFull: { he: 'צפה בפרופיל מלא ב-QRZ', en: 'View Full Profile on QRZ' },
-  qrzLookupPartial: { he: 'חלק מהנתונים אינם זמינים', en: 'Some data unavailable' },
   noActiveNet: { he: 'אין רשת פעילה', en: 'No Active Net' },
   netDetected: { he: 'רשת פעילה זוהתה', en: 'Active Net Detected' },
   netDetectedDesc: { he: 'הטופס הותאם אוטומטית לרשת הפעילה', en: 'Form auto-configured for active net' },
