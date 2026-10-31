@@ -524,6 +524,19 @@ export function useNets() {
     []
   );
 
+  const updateNetSchedule = useCallback(async (netId: string, startsAt: string, endsAt: string): Promise<boolean> => {
+    const { data, error: err } = await supabase
+      .from('nets')
+      .update({ starts_at: startsAt, ends_at: endsAt })
+      .eq('id', netId)
+      .select()
+      .maybeSingle();
+    if (err || !data) return false;
+    const net = data as Net;
+    setNets((prev) => prev.map((row) => (row.id === netId ? net : row)));
+    return true;
+  }, []);
+
   const deleteNet = useCallback(async (netId: string): Promise<boolean> => {
     const { error: err } = await supabase.from('nets').delete().eq('id', netId);
     if (err) return false;
@@ -557,6 +570,7 @@ export function useNets() {
     createNet,
     addParticipant,
     addReport,
+    updateNetSchedule,
     deleteNet,
     deleteParticipant,
     deleteReport,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Network, Plus, Trash2, Download, FileDown, FileArchive, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X } from 'lucide-react';
+import { Network, Plus, Trash2, Download, FileDown, FileArchive, Loader2, Users, Radio, MapPin, Zap, Antenna as AntennaIcon, X, Pencil } from 'lucide-react';
 import { BANDS, MODES, Net, NetParticipant, NewNet, NewNetParticipant, NewSignalReport, SignalReport } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { downloadSignalMatrix, downloadNetPdf } from '@/lib/signalMatrix';
@@ -10,6 +10,7 @@ import CallsignLink from '@/components/CallsignLink';
 import { getActiveNet } from '@/lib/nets';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { formatJerusalemDateTime, jerusalemDateString } from '@/lib/netTime';
+import { jerusalemTimeInputValue, netWindowFromClock } from '@/lib/liveNetSchedule';
 
 interface NetManagerProps {
   nets: Net[];
@@ -22,6 +23,7 @@ interface NetManagerProps {
   onCreateNet: (payload: NewNet) => Promise<{ error: boolean; net?: Net }>;
   onAddParticipant: (netId: string, payload: NewNetParticipant) => Promise<{ error: boolean; exists?: boolean }>;
   onAddReport: (netId: string, payload: NewSignalReport) => Promise<{ error: boolean; exists?: boolean }>;
+  onUpdateSchedule: (netId: string, startsAt: string, endsAt: string) => Promise<boolean>;
   onDeleteNet: (netId: string) => Promise<boolean>;
   onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onDeleteReport: (reportId: string) => Promise<boolean>;
@@ -64,6 +66,7 @@ export default function NetManager({
   onCreateNet,
   onAddParticipant,
   onAddReport,
+  onUpdateSchedule,
   onDeleteNet,
   onDeleteParticipant,
   onDeleteReport,
@@ -84,6 +87,10 @@ export default function NetManager({
   const [showAddR, setShowAddR] = useState(false);
   const [rForm, setRForm] = useState<NewSignalReport>(emptyReport);
   const [pendingNetDelete, setPendingNetDelete] = useState<Net | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const today = utcNow ? jerusalemDateString(utcNow) : '';
   const minDate = utcNow
@@ -97,6 +104,10 @@ export default function NetManager({
   const [showExportReports, setShowExportReports] = useState(false);
 
   const selectedNet = nets.find((n) => n.id === selectedNetId) ?? null;
+
+  useEffect(() => {
+    setEditingSchedule(false);
+  }, [selectedNetId]);
   const isHFNet = selectedNet ? !['FM', 'FT8', 'FT4', 'VARAC', 'SATELLITE', 'DIGITAL VOICE'].includes(selectedNet.mode) : true;
 
   useEffect(() => {
@@ -175,6 +186,33 @@ export default function NetManager({
     const ok = downloadNetPdf(net, exportP, exportR);
     onToast(ok ? t('netPdfDone') : t('netPdfError'), '', !ok);
     setExporting(false);
+  };
+
+  const openScheduleEdit = () => {
+    if (!selectedNet) return;
+    const anchor = selectedNet.starts_at || selectedNet.ends_at;
+    setStartTime(anchor ? jerusalemTimeInputValue(selectedNet.starts_at || anchor) : '17:25');
+    setEndTime(selectedNet.ends_at ? jerusalemTimeInputValue(selectedNet.ends_at) : '19:15');
+    setEditingSchedule(true);
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNet) return;
+    const window = netWindowFromClock(selectedNet, startTime, endTime);
+    if (!window) {
+      onToast(t('netScheduleInvalid'), '', true);
+      return;
+    }
+    setSavingSchedule(true);
+    const ok = await onUpdateSchedule(selectedNet.id, window.startsAt, window.endsAt);
+    setSavingSchedule(false);
+    if (!ok) {
+      onToast(t('netScheduleError'), selectedNet.name, true);
+      return;
+    }
+    setEditingSchedule(false);
+    onToast(t('netScheduleSaved'), selectedNet.name);
   };
 
   const handleDeleteNet = async () => {
@@ -350,11 +388,63 @@ export default function NetManager({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {(selectedNet.starts_at ? formatJerusalemDateTime(selectedNet.starts_at) : selectedNet.net_date)} · {selectedNet.frequency} MHz · {selectedNet.mode}
-              </p>
+              {editingSchedule ? (
+                <form onSubmit={handleSaveSchedule} className="mt-2 flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className={label} htmlFor="net-start-time">{t('netStartTime')}</label>
+                    <input
+                      id="net-start-time"
+                      type="time"
+                      required
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={`${field} !w-32 font-mono`}
+                    />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="net-end-time">{t('netEndTime')}</label>
+                    <input
+                      id="net-end-time"
+                      type="time"
+                      required
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className={`${field} !w-32 font-mono`}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={savingSchedule}
+                    className="inline-flex items-center justify-center rounded-full bg-brand-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-600 disabled:opacity-70"
+                  >
+                    {savingSchedule ? <Loader2 className="h-4 w-4 animate-spin" /> : t('netSaveSchedule')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSchedule(false)}
+                    className="inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-500/10"
+                  >
+                    {t('cancel')}
+                  </button>
+                </form>
+              ) : (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {(selectedNet.starts_at ? formatJerusalemDateTime(selectedNet.starts_at) : selectedNet.net_date)} · {selectedNet.frequency} MHz · {selectedNet.mode}
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={openScheduleEdit}
+                  className="inline-flex items-center justify-center rounded-full bg-brand-500/10 p-2 text-brand-600 transition hover:bg-brand-500/20 active:scale-95 dark:text-brand-300"
+                  aria-label={t('netEditDetails')}
+                  title={t('netEditDetails')}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setPendingNetDelete(selectedNet)}

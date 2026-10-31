@@ -29,7 +29,7 @@ import TodaysReport from '@/components/TodaysReport';
 import CallsignModal from '@/components/CallsignModal';
 import CatSettingsModal from '@/components/CatSettingsModal';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
-import { getLiveNet } from '@/lib/liveNetSchedule';
+import { resolveLiveNet } from '@/lib/liveNetSchedule';
 import { ADMIN_CALLSIGN } from '@/lib/adminProxy';
 import { isManagerOrAdmin } from '@/utils/managerCheck';
 import { Calendar, Shield } from 'lucide-react';
@@ -121,7 +121,7 @@ export default function App() {
 
   const cat = useCatControl(myCallsign, handleCatSettled, handleVfoMove);
   const utcNow = useServerUtcNow();
-  const liveNet = utcNow ? getLiveNet(utcNow) : null;
+  const liveNet = utcNow ? resolveLiveNet(utcNow, nets.nets) : null;
 
   const myCallsignRef = useRef(myCallsign);
   myCallsignRef.current = myCallsign;
@@ -369,6 +369,7 @@ export default function App() {
               onCreateNet={nets.createNet}
               onAddParticipant={nets.addParticipant}
               onAddReport={nets.addReport}
+              onUpdateSchedule={nets.updateNetSchedule}
               onDeleteNet={nets.deleteNet}
               onDeleteParticipant={nets.deleteParticipant}
               onDeleteReport={nets.deleteReport}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { getLiveNet } from './liveNetSchedule.ts';
+import { getLiveNet, netWindowFromClock, resolveLiveNet } from './liveNetSchedule.ts';
 
 describe('live net detection (Asia/Jerusalem)', () => {
   it('opens the daily roundtable at 17:25 Israel in winter and summer', () => {
@@ -39,6 +39,58 @@ describe('live net detection (Asia/Jerusalem)', () => {
     assert.equal(net?.power, '100');
     assert.equal(getLiveNet(new Date('2026-01-17T10:00:00.000Z'))?.id, 'shabbat');
     assert.equal(getLiveNet(new Date('2026-01-17T10:01:00.000Z')), null);
+  });
+
+  it('follows a saved Daily Roundtable window instead of 17:25', () => {
+    const saved = {
+      name: 'Daily Roundtable Net',
+      starts_at: '2026-01-15T14:25:00.000Z',
+      ends_at: '2026-01-15T17:15:00.000Z',
+    };
+    assert.equal(getLiveNet(new Date('2026-01-15T15:00:00.000Z')), null);
+    assert.equal(resolveLiveNet(new Date('2026-01-15T14:24:00.000Z'), [saved]), null);
+    assert.equal(resolveLiveNet(new Date('2026-01-15T15:00:00.000Z'), [saved])?.id, 'roundtable');
+    assert.equal(resolveLiveNet(new Date('2026-01-15T17:15:00.000Z'), [saved])?.id, 'roundtable');
+    assert.equal(resolveLiveNet(new Date('2026-01-15T17:16:00.000Z'), [saved]), null);
+  });
+
+  it('hides the built-in window when today\'s saved start is later', () => {
+    const saved = {
+      name: 'Daily Roundtable Net',
+      starts_at: '2026-01-15T16:30:00.000Z',
+      ends_at: '2026-01-15T17:15:00.000Z',
+    };
+    assert.equal(getLiveNet(new Date('2026-01-15T16:00:00.000Z'))?.id, 'roundtable');
+    assert.equal(resolveLiveNet(new Date('2026-01-15T16:00:00.000Z'), [saved]), null);
+    assert.equal(resolveLiveNet(new Date('2026-01-15T16:30:00.000Z'), [saved])?.id, 'roundtable');
+  });
+
+  it('keeps other nets on the built-in clock when only the roundtable row changed', () => {
+    const saved = {
+      name: 'Daily Roundtable Net',
+      starts_at: '2026-01-13T14:25:00.000Z',
+      ends_at: '2026-01-13T17:15:00.000Z',
+    };
+    assert.equal(resolveLiveNet(new Date('2026-01-13T17:25:00.000Z'), [saved])?.id, 'gal');
+  });
+
+  it('stores an edited 16:25 start on the session date in both offsets', () => {
+    const winter = netWindowFromClock(
+      { starts_at: '2026-01-15T15:25:00.000Z', net_date: '2026-01-15' },
+      '16:25',
+      '19:15'
+    );
+    assert.equal(winter?.startsAt, '2026-01-15T14:25:00.000Z');
+    assert.equal(winter?.endsAt, '2026-01-15T17:15:00.000Z');
+
+    const summer = netWindowFromClock(
+      { starts_at: '2026-07-15T14:25:00.000Z', net_date: '2026-07-15' },
+      '16:25',
+      '19:15'
+    );
+    assert.equal(summer?.startsAt, '2026-07-15T13:25:00.000Z');
+    assert.equal(summer?.endsAt, '2026-07-15T16:15:00.000Z');
+    assert.equal(netWindowFromClock({ starts_at: '2026-01-15T15:25:00.000Z' }, '19:15', '17:25'), null);
   });
 
   it('detects Israel AllStar Link Net on Thursday with blank power', () => {
