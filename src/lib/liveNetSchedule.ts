@@ -223,6 +223,37 @@ export function planRecurringRetimes<T extends { id: string; name: string; start
   return planned;
 }
 
+export function mergeNetRows<T extends { id: string }>(...groups: T[][]): T[] {
+  const byId = new Map<string, T>();
+  for (const group of groups) {
+    for (const row of group) byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Dropdown state after a recurring edit.
+ * New times replace the matching rows, including when today's row was just inserted
+ * and that id is already present. Past rows stay as they are.
+ */
+export function applyRetimedNets<
+  T extends { id: string; name: string; net_date: string; starts_at?: string | null; ends_at?: string | null },
+>(rows: T[], changes: RetimedNet[], inserted: T | null): T[] {
+  const changeById = new Map(changes.map((change) => [change.id, change]));
+  if (inserted?.starts_at && inserted.ends_at) {
+    changeById.set(inserted.id, { id: inserted.id, startsAt: inserted.starts_at, endsAt: inserted.ends_at });
+  }
+  const seen = new Set<string>();
+  const next: T[] = [];
+  for (const row of inserted ? [...rows, inserted] : rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    const change = changeById.get(row.id);
+    next.push(change ? { ...row, starts_at: change.startsAt, ends_at: change.endsAt } : row);
+  }
+  return next.sort((a, b) => b.net_date.localeCompare(a.net_date) || a.name.localeCompare(b.name));
+}
+
 function withRecurringClock(net: LiveNetSchedule, recurring: RecurringNetWindow[]): LiveNetSchedule {
   const clock = recurring.find((window) => window.scheduleId === net.id);
   if (!clock) return net;
