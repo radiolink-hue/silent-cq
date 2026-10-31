@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Net, NewNet, NetParticipant, NewNetParticipant, SignalReport, NewSignalReport, CqSession, CqSignalReport } from '@/types';
-import { getActiveNet, getScheduleUtcWindow } from '@/lib/nets';
+import { NET_SCHEDULES, getActiveNet, getScheduleUtcWindow } from '@/lib/nets';
 import { fetchServerUtcNow } from '@/lib/serverClock';
-import { DISPLAY_TZ, jerusalemDateToUtcRange, utcDateString, zonedWallTimeToUtc } from '@/lib/netTime';
+import { DISPLAY_TZ, getZonedCivilTime, jerusalemDateString, jerusalemDateToUtcRange, utcDateString, zonedWallTimeToUtc } from '@/lib/netTime';
+import {
+  netJerusalemDate,
+  netWindowFromClock,
+  planRecurringRetimes,
+  recurringWindowFromClock,
+  recurringWindowFromRow,
+  scheduleIdForName,
+  windowOnJerusalemDate,
+  type NetScheduleTemplateRow,
+  type RecurringNetWindow,
+} from '@/lib/liveNetSchedule';
 import {
   isLiveSilentCqPost,
   liveSilentCqCallsigns,
@@ -24,6 +35,9 @@ async function fetchExistingNet(name: string, netDate: string): Promise<Net | nu
 
 export function useNets() {
   const [nets, setNets] = useState<Net[]>([]);
+  const [templates, setTemplates] = useState<RecurringNetWindow[]>([]);
+  const [templatesReady, setTemplatesReady] = useState(false);
+  const templatesRef = useRef<RecurringNetWindow[]>([]);
   const [participants, setParticipants] = useState<NetParticipant[]>([]);
   const [reports, setReports] = useState<SignalReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +60,19 @@ export function useNets() {
       setNets(data ?? []);
     }
     setLoading(false);
+  }, []);
+
+  const loadTemplates = useCallback(async () => {
+    const { data, error: err } = await supabase
+      .from('net_schedule_templates')
+      .select('schedule_id, start_hour, start_minute, end_hour, end_minute');
+    if (err || !data) return;
+    const next = (data as NetScheduleTemplateRow[]).flatMap((row) => {
+      const window = recurringWindowFromRow(row);
+      return window ? [window] : [];
+    });
+    templatesRef.current = next;
+    setTemplates(next);
   }, []);
 
   const fetchNetsByDate = useCallback(async (date: string): Promise<Net[]> => {
@@ -136,7 +163,7 @@ export function useNets() {
     const utcNow = await fetchServerUtcNow();
     if (!utcNow) return null;
 
-    const schedule = getActiveNet(utcNow);
+    const schedule = getActiveNet(utcNow, templatesRef.current);
     if (!schedule) return null;
 
     const { startsAt, endsAt } = getScheduleUtcWindow(schedule, utcNow);
@@ -304,7 +331,7 @@ export function useNets() {
 
   // --- Main auto-sync routine ---
   const autoSync = useCallback(async () => {
-    if (syncLockRef.current) return;
+    if (!templatesReady || syncLockRef.current) return;
     syncLockRef.current = true;
 
     try {
@@ -321,11 +348,12 @@ export function useNets() {
     } finally {
       syncLockRef.current = false;
     }
-  }, [ensureScheduledNet, syncParticipants, syncSignalReports]);
+  }, [ensureScheduledNet, syncParticipants, syncSignalReports, templatesReady]);
 
   useEffect(() => {
     loadNets();
-    const channel = supabase
+    void loadTemplates().finally(() => setTemplatesReady(true));
+    const netsChannel = supabase
       .channel('nets_stream')
       .on(
         'postgres_changes',
@@ -333,17 +361,27 @@ export function useNets() {
         () => loadNets()
       )
       .subscribe();
+    const templateChannel = supabase
+      .channel('net_schedule_templates_stream')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'net_schedule_templates' },
+        () => loadTemplates()
+      )
+      .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(netsChannel);
+      supabase.removeChannel(templateChannel);
     };
-  }, [loadNets]);
+  }, [loadNets, loadTemplates]);
 
-  // Auto-sync: check every 60 seconds for active net
+  // Auto-sync: check every 60 seconds for active net, after templates have loaded.
   useEffect(() => {
+    if (!templatesReady) return;
     autoSync();
     const interval = setInterval(autoSync, 60_000);
     return () => clearInterval(interval);
-  }, [autoSync]);
+  }, [autoSync, templatesReady]);
 
   // Also trigger sync when CQ sessions change (realtime)
   useEffect(() => {
@@ -524,16 +562,117 @@ export function useNets() {
     []
   );
 
-  const updateNetSchedule = useCallback(async (netId: string, startsAt: string, endsAt: string): Promise<boolean> => {
-    const { data, error: err } = await supabase
+  const updateNetSchedule = useCallback(async (net: Net, startHHMM: string, endHHMM: string): Promise<boolean> => {
+    const scheduleId = scheduleIdForName(net.name);
+    if (!scheduleId) {
+      const window = netWindowFromClock(net, startHHMM, endHHMM);
+      if (!window) return false;
+      const { data, error: err } = await supabase
+        .from('nets')
+        .update({ starts_at: window.startsAt, ends_at: window.endsAt })
+        .eq('id', net.id)
+        .select()
+        .maybeSingle();
+      if (err || !data) return false;
+      const saved = data as Net;
+      setNets((prev) => prev.map((row) => (row.id === net.id ? saved : row)));
+      return true;
+    }
+
+    const clock = recurringWindowFromClock(scheduleId, startHHMM, endHHMM);
+    if (!clock) return false;
+
+    const utcNow = (await fetchServerUtcNow()) ?? new Date();
+    const today = jerusalemDateString(utcNow);
+    const { error: templateError } = await supabase.from('net_schedule_templates').upsert(
+      {
+        schedule_id: scheduleId,
+        start_hour: clock.startHour,
+        start_minute: clock.startMinute,
+        end_hour: clock.endHour,
+        end_minute: clock.endMinute,
+        updated_at: utcNow.toISOString(),
+      },
+      { onConflict: 'schedule_id' }
+    );
+    if (templateError) return false;
+
+    const { start } = jerusalemDateToUtcRange(today);
+    const { data: fetched, error: fetchError } = await supabase
       .from('nets')
-      .update({ starts_at: startsAt, ends_at: endsAt })
-      .eq('id', netId)
-      .select()
-      .maybeSingle();
-    if (err || !data) return false;
-    const net = data as Net;
-    setNets((prev) => prev.map((row) => (row.id === netId ? net : row)));
+      .select('*')
+      .or(`net_date.gte.${today},starts_at.gte.${start.toISOString()}`);
+    if (fetchError) return false;
+
+    const candidates = (fetched ?? []) as Net[];
+    const planned = planRecurringRetimes(candidates, scheduleId, clock, today);
+    for (const change of planned) {
+      const { error: rowError } = await supabase
+        .from('nets')
+        .update({ starts_at: change.startsAt, ends_at: change.endsAt })
+        .eq('id', change.id);
+      if (rowError) return false;
+    }
+
+    const base = NET_SCHEDULES.find((item) => item.id === scheduleId);
+    const civil = getZonedCivilTime(utcNow);
+    const runsToday = !!base && (base.dayOfWeek === -1 || base.dayOfWeek === civil.dayOfWeek);
+    const todayCovered = candidates.some(
+      (row) => scheduleIdForName(row.name) === scheduleId && netJerusalemDate(row) === today
+    );
+    let inserted: Net | null = null;
+    if (runsToday && base && !todayCovered) {
+      const window = windowOnJerusalemDate(civil.year, civil.month, civil.day, clock);
+      if (!window) return false;
+      const payload: NewNet = {
+        name: base.name,
+        net_date: utcDateString(new Date(window.startsAt)),
+        frequency: base.frequency,
+        mode: base.mode,
+        starts_at: window.startsAt,
+        ends_at: window.endsAt,
+      };
+      const { data, error: insertError } = await supabase.from('nets').insert(payload).select().maybeSingle();
+      if (insertError) {
+        if (insertError.code !== '23505') return false;
+        const raced = await fetchExistingNet(base.name, payload.net_date);
+        if (!raced) return false;
+        const { error: racedError } = await supabase
+          .from('nets')
+          .update({ starts_at: window.startsAt, ends_at: window.endsAt })
+          .eq('id', raced.id);
+        if (racedError) return false;
+        inserted = { ...raced, starts_at: window.startsAt, ends_at: window.endsAt };
+      } else if (data) {
+        inserted = data as Net;
+      } else {
+        return false;
+      }
+    }
+
+    const nextTemplates = [
+      ...templatesRef.current.filter((item) => item.scheduleId !== clock.scheduleId),
+      clock,
+    ];
+    templatesRef.current = nextTemplates;
+    setTemplates(nextTemplates);
+    const changes = new Map(planned.map((change) => [change.id, change]));
+    setNets((prev) => {
+      const seen = new Set<string>();
+      const next = prev.map((row) => {
+        seen.add(row.id);
+        const change = changes.get(row.id);
+        return change ? { ...row, starts_at: change.startsAt, ends_at: change.endsAt } : row;
+      });
+      for (const row of candidates) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        const change = changes.get(row.id);
+        next.push(change ? { ...row, starts_at: change.startsAt, ends_at: change.endsAt } : row);
+      }
+      if (inserted && !seen.has(inserted.id)) next.unshift(inserted);
+      return next;
+    });
     return true;
   }, []);
 
@@ -561,6 +700,7 @@ export function useNets() {
 
   return {
     nets,
+    templates,
     participants,
     reports,
     loading,

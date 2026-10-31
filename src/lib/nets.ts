@@ -4,6 +4,7 @@ import {
   jerusalemDateString,
   zonedWallTimeToUtc,
 } from './netTime.ts';
+import type { RecurringNetWindow } from './liveNetSchedule.ts';
 
 export interface NetSchedule {
   id: string;
@@ -89,6 +90,18 @@ export const NET_SCHEDULES: NetSchedule[] = [
   },
 ];
 
+function withRecurringClock(schedule: NetSchedule, windows: RecurringNetWindow[]): NetSchedule {
+  const clock = windows.find((window) => window.scheduleId === schedule.id);
+  if (!clock) return schedule;
+  return {
+    ...schedule,
+    startHour: clock.startHour,
+    startMinute: clock.startMinute,
+    endHour: clock.endHour,
+    endMinute: clock.endMinute,
+  };
+}
+
 export function getScheduleUtcWindow(
   schedule: NetSchedule,
   utcNow: Date
@@ -118,16 +131,17 @@ export function getScheduleUtcWindow(
  * Decide which scheduled net is live using a UTC instant (server clock).
  * Do not pass the browser's local clock.
  */
-export function getActiveNet(utcNow: Date): NetSchedule | null {
+export function getActiveNet(utcNow: Date, windows: RecurringNetWindow[] = []): NetSchedule | null {
   const civil = getZonedCivilTime(utcNow);
   const currentMinutes = civil.hour * 60 + civil.minute;
 
   for (const net of NET_SCHEDULES) {
-    if (net.dayOfWeek !== -1 && net.dayOfWeek !== civil.dayOfWeek) continue;
-    const start = net.startHour * 60 + net.startMinute;
-    const end = net.endHour * 60 + net.endMinute;
+    const timed = withRecurringClock(net, windows);
+    if (timed.dayOfWeek !== -1 && timed.dayOfWeek !== civil.dayOfWeek) continue;
+    const start = timed.startHour * 60 + timed.startMinute;
+    const end = timed.endHour * 60 + timed.endMinute;
     if (currentMinutes >= start && currentMinutes <= end) {
-      return net;
+      return timed;
     }
   }
   return null;

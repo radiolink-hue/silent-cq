@@ -38,4 +38,16 @@ describe('net UTC schedule', () => {
     const winter = getScheduleUtcWindow(getActiveNet(winterThu)!, winterThu);
     assert.equal(winter.startsAt.toISOString(), '2026-01-15T17:55:00.000Z');
   });
+
+  it('opens the roundtable from a saved 16:25 template', () => {
+    const windows = [{ scheduleId: 'roundtable' as const, startHour: 16, startMinute: 25, endHour: 19, endMinute: 15 }];
+    const shifted = getActiveNet(new Date('2026-01-15T14:30:00.000Z'), windows);
+    assert.equal(shifted?.id, 'roundtable');
+    assert.equal(shifted?.startHour, 16);
+    assert.equal(shifted?.startMinute, 25);
+    assert.equal(getActiveNet(new Date('2026-01-15T14:24:00.000Z'), windows), null);
+    const window = getScheduleUtcWindow(shifted!, new Date('2026-01-15T14:30:00.000Z'));
+    assert.equal(window.startsAt.toISOString(), '2026-01-15T14:25:00.000Z');
+    assert.equal(window.endsAt.toISOString(), '2026-01-15T17:15:00.000Z');
+  });
 });

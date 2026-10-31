@@ -10,10 +10,17 @@ import CallsignLink from '@/components/CallsignLink';
 import { getActiveNet } from '@/lib/nets';
 import { useServerUtcNow } from '@/hooks/useServerUtcNow';
 import { formatJerusalemDateTime, jerusalemDateString } from '@/lib/netTime';
-import { jerusalemTimeInputValue, netWindowFromClock } from '@/lib/liveNetSchedule';
+import {
+  jerusalemTimeInputValue,
+  netWindowFromClock,
+  recurringWindowFromClock,
+  scheduleIdForName,
+  type RecurringNetWindow,
+} from '@/lib/liveNetSchedule';
 
 interface NetManagerProps {
   nets: Net[];
+  templates: RecurringNetWindow[];
   participants: NetParticipant[];
   reports: SignalReport[];
   loading: boolean;
@@ -23,7 +30,7 @@ interface NetManagerProps {
   onCreateNet: (payload: NewNet) => Promise<{ error: boolean; net?: Net }>;
   onAddParticipant: (netId: string, payload: NewNetParticipant) => Promise<{ error: boolean; exists?: boolean }>;
   onAddReport: (netId: string, payload: NewSignalReport) => Promise<{ error: boolean; exists?: boolean }>;
-  onUpdateSchedule: (netId: string, startsAt: string, endsAt: string) => Promise<boolean>;
+  onUpdateSchedule: (net: Net, startHHMM: string, endHHMM: string) => Promise<boolean>;
   onDeleteNet: (netId: string) => Promise<boolean>;
   onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onDeleteReport: (reportId: string) => Promise<boolean>;
@@ -57,6 +64,7 @@ const emptyReport: NewSignalReport = {
 
 export default function NetManager({
   nets,
+  templates,
   participants,
   reports,
   loading,
@@ -190,22 +198,32 @@ export default function NetManager({
 
   const openScheduleEdit = () => {
     if (!selectedNet) return;
-    const anchor = selectedNet.starts_at || selectedNet.ends_at;
-    setStartTime(anchor ? jerusalemTimeInputValue(selectedNet.starts_at || anchor) : '17:25');
-    setEndTime(selectedNet.ends_at ? jerusalemTimeInputValue(selectedNet.ends_at) : '19:15');
+    const scheduleId = scheduleIdForName(selectedNet.name);
+    const template = scheduleId ? templates.find((item) => item.scheduleId === scheduleId) : undefined;
+    if (template) {
+      setStartTime(`${String(template.startHour).padStart(2, '0')}:${String(template.startMinute).padStart(2, '0')}`);
+      setEndTime(`${String(template.endHour).padStart(2, '0')}:${String(template.endMinute).padStart(2, '0')}`);
+    } else {
+      const anchor = selectedNet.starts_at || selectedNet.ends_at;
+      setStartTime(anchor ? jerusalemTimeInputValue(selectedNet.starts_at || anchor) : '17:25');
+      setEndTime(selectedNet.ends_at ? jerusalemTimeInputValue(selectedNet.ends_at) : '19:15');
+    }
     setEditingSchedule(true);
   };
 
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedNet) return;
-    const window = netWindowFromClock(selectedNet, startTime, endTime);
-    if (!window) {
+    const scheduleId = scheduleIdForName(selectedNet.name);
+    const valid = scheduleId
+      ? recurringWindowFromClock(scheduleId, startTime, endTime)
+      : netWindowFromClock(selectedNet, startTime, endTime);
+    if (!valid) {
       onToast(t('netScheduleInvalid'), '', true);
       return;
     }
     setSavingSchedule(true);
-    const ok = await onUpdateSchedule(selectedNet.id, window.startsAt, window.endsAt);
+    const ok = await onUpdateSchedule(selectedNet, startTime, endTime);
     setSavingSchedule(false);
     if (!ok) {
       onToast(t('netScheduleError'), selectedNet.name, true);
@@ -381,7 +399,7 @@ export default function NetManager({
                 <h3 className="text-lg font-bold">
                   {selectedNet.name || `${selectedNet.frequency} ${selectedNet.mode}`}
                 </h3>
-                {utcNow && getActiveNet(utcNow) && (
+                {utcNow && getActiveNet(utcNow, templates) && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                     {t('netAutoSynced')}
@@ -426,6 +444,9 @@ export default function NetManager({
                   >
                     {t('cancel')}
                   </button>
+                  {scheduleIdForName(selectedNet.name) && (
+                    <p className="w-full text-xs text-slate-500 dark:text-slate-400">{t('netScheduleScope')}</p>
+                  )}
                 </form>
               ) : (
                 <p className="text-sm text-slate-500 dark:text-slate-400">

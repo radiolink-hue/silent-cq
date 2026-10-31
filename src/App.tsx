@@ -121,7 +121,7 @@ export default function App() {
 
   const cat = useCatControl(myCallsign, handleCatSettled, handleVfoMove);
   const utcNow = useServerUtcNow();
-  const liveNet = utcNow ? resolveLiveNet(utcNow, nets.nets) : null;
+  const liveNet = utcNow ? resolveLiveNet(utcNow, nets.nets, nets.templates) : null;
 
   const myCallsignRef = useRef(myCallsign);
   myCallsignRef.current = myCallsign;
@@ -360,6 +360,7 @@ export default function App() {
           {tab === 'nets' && (
             <NetManager
               nets={nets.nets}
+              templates={nets.templates}
               participants={nets.participants}
               reports={nets.reports}
               loading={nets.loading}
