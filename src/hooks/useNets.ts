@@ -5,6 +5,8 @@ import { NET_SCHEDULES, getActiveNet, getScheduleUtcWindow } from '@/lib/nets';
 import { fetchServerUtcNow } from '@/lib/serverClock';
 import { DISPLAY_TZ, getZonedCivilTime, jerusalemDateString, jerusalemDateToUtcRange, utcDateString, zonedWallTimeToUtc } from '@/lib/netTime';
 import {
+  applyRetimedNets,
+  mergeNetRows,
   netJerusalemDate,
   netWindowFromClock,
   planRecurringRetimes,
@@ -44,8 +46,12 @@ export function useNets() {
   const [error, setError] = useState(false);
   const [selectedNetId, setSelectedNetId] = useState<string | null>(null);
   const syncLockRef = useRef(false);
+  const netsRef = useRef<Net[]>([]);
+  const netsLoadRef = useRef(0);
+  netsRef.current = nets;
 
   const loadNets = useCallback(async () => {
+    const requestId = ++netsLoadRef.current;
     const utcNow = (await fetchServerUtcNow()) ?? new Date();
     const cutoff = new Date(utcNow.getTime() - 30 * 24 * 60 * 60 * 1000);
     const { data, error: err } = await supabase
@@ -53,6 +59,7 @@ export function useNets() {
       .select('*')
       .or(`starts_at.gte.${cutoff.toISOString()},and(starts_at.is.null,net_date.gte.${utcDateString(cutoff)})`)
       .order('net_date', { ascending: false });
+    if (requestId !== netsLoadRef.current) return;
     if (err) {
       setError(true);
     } else {
@@ -575,6 +582,7 @@ export function useNets() {
         .maybeSingle();
       if (err || !data) return false;
       const saved = data as Net;
+      netsLoadRef.current += 1;
       setNets((prev) => prev.map((row) => (row.id === net.id ? saved : row)));
       return true;
     }
@@ -604,8 +612,8 @@ export function useNets() {
       .or(`net_date.gte.${today},starts_at.gte.${start.toISOString()}`);
     if (fetchError) return false;
 
-    const candidates = (fetched ?? []) as Net[];
-    const planned = planRecurringRetimes(candidates, scheduleId, clock, today);
+    const combined = mergeNetRows((fetched ?? []) as Net[], netsRef.current);
+    const planned = planRecurringRetimes(combined, scheduleId, clock, today);
     for (const change of planned) {
       const { error: rowError } = await supabase
         .from('nets')
@@ -617,7 +625,7 @@ export function useNets() {
     const base = NET_SCHEDULES.find((item) => item.id === scheduleId);
     const civil = getZonedCivilTime(utcNow);
     const runsToday = !!base && (base.dayOfWeek === -1 || base.dayOfWeek === civil.dayOfWeek);
-    const todayCovered = candidates.some(
+    const todayCovered = combined.some(
       (row) => scheduleIdForName(row.name) === scheduleId && netJerusalemDate(row) === today
     );
     let inserted: Net | null = null;
@@ -656,23 +664,14 @@ export function useNets() {
     ];
     templatesRef.current = nextTemplates;
     setTemplates(nextTemplates);
-    const changes = new Map(planned.map((change) => [change.id, change]));
-    setNets((prev) => {
-      const seen = new Set<string>();
-      const next = prev.map((row) => {
-        seen.add(row.id);
-        const change = changes.get(row.id);
-        return change ? { ...row, starts_at: change.startsAt, ends_at: change.endsAt } : row;
-      });
-      for (const row of candidates) {
-        if (seen.has(row.id)) continue;
-        seen.add(row.id);
-        const change = changes.get(row.id);
-        next.push(change ? { ...row, starts_at: change.startsAt, ends_at: change.endsAt } : row);
-      }
-      if (inserted && !seen.has(inserted.id)) next.unshift(inserted);
-      return next;
-    });
+    const nextRows = applyRetimedNets(combined, planned, inserted);
+    const todayId = nextRows.find(
+      (row) => scheduleIdForName(row.name) === scheduleId && netJerusalemDate(row) === today
+    )?.id;
+    netsLoadRef.current += 1;
+    setLoading(false);
+    setNets(nextRows);
+    if (todayId) setSelectedNetId(todayId);
     return true;
   }, []);
 

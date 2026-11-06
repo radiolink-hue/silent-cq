@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  applyRetimedNets,
   getLiveNet,
+  mergeNetRows,
   netWindowFromClock,
   planRecurringRetimes,
   recurringWindowFromClock,
@@ -153,6 +155,56 @@ describe('live net detection (Asia/Jerusalem)', () => {
     assert.equal(planned[0].startsAt, '2026-10-31T14:25:00.000Z');
     assert.equal(planned[0].endsAt, '2026-10-31T17:15:00.000Z');
     assert.equal(planned[1].startsAt, '2026-11-01T14:25:00.000Z');
+  });
+
+  it('puts a newly created today row in the dropdown and keeps 28/10 at its old time', () => {
+    const clock = { scheduleId: 'roundtable' as const, startHour: 16, startMinute: 25, endHour: 19, endMinute: 15 };
+    const past = {
+      id: 'past',
+      name: 'Daily Roundtable Net',
+      net_date: '2026-10-28',
+      starts_at: '2026-10-28T15:25:00.000Z',
+      ends_at: '2026-10-28T17:15:00.000Z',
+    };
+    const future = {
+      id: 'future',
+      name: 'Daily Roundtable Net',
+      net_date: '2026-11-01',
+      starts_at: '2026-11-01T15:25:00.000Z',
+      ends_at: '2026-11-01T17:15:00.000Z',
+    };
+    const localToday = {
+      id: 'today',
+      name: 'Daily Roundtable Net',
+      net_date: '2026-10-31',
+      starts_at: '2026-10-31T15:25:00.000Z',
+      ends_at: '2026-10-31T17:15:00.000Z',
+    };
+    const combined = mergeNetRows([future], [past, localToday]);
+    const planned = planRecurringRetimes(combined, 'roundtable', clock, '2026-10-31');
+    assert.deepEqual(planned.map((row) => row.id).sort(), ['future', 'today']);
+
+    const created = {
+      id: 'created-today',
+      name: 'Daily Roundtable Net',
+      net_date: '2026-10-31',
+      starts_at: '2026-10-31T14:25:00.000Z',
+      ends_at: '2026-10-31T17:15:00.000Z',
+    };
+    const listed = applyRetimedNets([past, future], planned.filter((row) => row.id !== 'today'), created);
+    assert.deepEqual(listed.map((row) => [row.id, row.starts_at]), [
+      ['future', '2026-11-01T14:25:00.000Z'],
+      ['created-today', '2026-10-31T14:25:00.000Z'],
+      ['past', '2026-10-28T15:25:00.000Z'],
+    ]);
+
+    const alreadyListed = applyRetimedNets(
+      [past, { ...created, starts_at: '2026-10-31T15:25:00.000Z' }, future],
+      [],
+      created
+    );
+    assert.equal(alreadyListed.filter((row) => row.id === 'created-today').length, 1);
+    assert.equal(alreadyListed.find((row) => row.id === 'created-today')?.starts_at, '2026-10-31T14:25:00.000Z');
   });
 
   it('detects Israel AllStar Link Net on Thursday with blank power', () => {
