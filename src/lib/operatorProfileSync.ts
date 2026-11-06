@@ -1,28 +1,49 @@
 import { supabase } from '@/lib/supabase';
-import { parseOperatorPower } from './operatorProfile';
+import { normalizeOperatorAntenna, parseOperatorPower } from './operatorProfile';
 
-export async function fetchOperatorPower(callsign: string): Promise<number | null> {
+export interface OperatorProfileRecord {
+  power: number | null;
+  antenna: string | null;
+}
+
+export async function fetchOperatorProfileRecord(callsign: string): Promise<OperatorProfileRecord | null> {
   const key = callsign.trim().toUpperCase();
   if (!key) return null;
   const { data, error } = await supabase
     .from('operator_profiles')
-    .select('power')
+    .select('power, antenna')
     .eq('callsign', key)
     .maybeSingle();
-  if (error || data?.power == null) return null;
-  return parseOperatorPower(data.power);
+  if (error) return null;
+  return {
+    power: data ? parseOperatorPower(data.power) : null,
+    antenna: data ? normalizeOperatorAntenna(data.antenna) : null,
+  };
+}
+
+export async function fetchOperatorPower(callsign: string): Promise<number | null> {
+  const record = await fetchOperatorProfileRecord(callsign);
+  return record?.power ?? null;
+}
+
+export async function persistOperatorProfileRecord(
+  callsign: string,
+  fields: { power?: number | null; antenna?: string | null }
+): Promise<void> {
+  const key = callsign.trim().toUpperCase();
+  if (!key) return;
+  const payload: { callsign: string; updated_at: string; power?: number; antenna?: string } = {
+    callsign: key,
+    updated_at: new Date().toISOString(),
+  };
+  const power = fields.power == null ? null : parseOperatorPower(fields.power);
+  const antenna = normalizeOperatorAntenna(fields.antenna);
+  if (power != null) payload.power = power;
+  if (antenna != null) payload.antenna = antenna;
+  if (payload.power == null && payload.antenna == null) return;
+  await supabase.from('operator_profiles').upsert(payload, { onConflict: 'callsign' });
 }
 
 export async function persistOperatorPower(callsign: string, power: number): Promise<void> {
-  const key = callsign.trim().toUpperCase();
-  const parsed = parseOperatorPower(power);
-  if (!key || parsed == null) return;
-  await supabase.from('operator_profiles').upsert(
-    {
-      callsign: key,
-      power: parsed,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'callsign' }
-  );
+  await persistOperatorProfileRecord(callsign, { power });
 }

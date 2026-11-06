@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Radio, Loader2, Send, Info, RadioTower, Activity } from 'lucide-react';
 import { BANDS, MODES, ANTENNAS, BAND_FREQ_RANGES, NewCqSession, defaultModeForBand } from '@/types';
 import { useApp } from '@/context/AppContext';
@@ -13,6 +13,7 @@ interface CallCqFormProps {
   myGridsquare: string;
   myCity: string;
   myPower: string;
+  myAntenna: string;
   liveNet: LiveNetSchedule | null;
   catTelemetry: CatTelemetry | null;
   catConnected: boolean;
@@ -28,11 +29,12 @@ const emptyDefaults = {
   comments: '',
 };
 
-function emptyForm(power: string, city: string) {
+function emptyForm(power: string, city: string, antenna: string) {
   return {
     ...emptyDefaults,
     power,
     city,
+    antenna: antenna || emptyDefaults.antenna,
   };
 }
 
@@ -43,6 +45,7 @@ export default function CallCqForm({
   myGridsquare,
   myCity,
   myPower,
+  myAntenna,
   liveNet,
   catTelemetry,
   catConnected,
@@ -50,7 +53,8 @@ export default function CallCqForm({
   settlingSeconds,
 }: CallCqFormProps) {
   const { t } = useApp();
-  const [form, setForm] = useState(() => emptyForm(myPower, myCity));
+  const [form, setForm] = useState(() => emptyForm(myPower, myCity, myAntenna));
+  const antennaEdited = useRef(false);
   const [gridsquare, setGridsquare] = useState(myGridsquare);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -67,6 +71,11 @@ export default function CallCqForm({
   }, [myPower, liveNet]);
 
   useEffect(() => {
+    if (antennaEdited.current || !myAntenna) return;
+    setForm((f) => (f.antenna === myAntenna ? f : { ...f, antenna: myAntenna }));
+  }, [myAntenna]);
+
+  useEffect(() => {
     if (!liveNet) return;
     setForm((f) => ({
       ...f,
@@ -74,7 +83,6 @@ export default function CallCqForm({
       mode: liveNet.mode,
       frequency: liveNet.frequency,
       power: liveNet.power,
-      antenna: liveNet.antenna,
     }));
   }, [liveNet]);
 
@@ -148,7 +156,8 @@ export default function CallCqForm({
     const ok = await doSubmit(payload);
     setSubmitting(false);
     if (ok) {
-      setForm(emptyForm(myPower, payload.city.trim() || myCity));
+      antennaEdited.current = false;
+      setForm(emptyForm(myPower, payload.city.trim() || myCity, myAntenna));
       setGridsquare(payload.gridsquare.trim().toUpperCase() || myGridsquare);
       onSuccess();
     }
@@ -264,7 +273,15 @@ export default function CallCqForm({
 
           <div>
             <label className={label} htmlFor="antenna">{t('antennaField')}</label>
-            <select id="antenna" value={form.antenna} onChange={(e) => set('antenna', e.target.value)} className={field}>
+            <select
+              id="antenna"
+              value={form.antenna}
+              onChange={(e) => {
+                antennaEdited.current = true;
+                set('antenna', e.target.value);
+              }}
+              className={field}
+            >
               {ANTENNAS.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>

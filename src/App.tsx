@@ -9,7 +9,7 @@ import {
   parseOperatorPower,
   saveOperatorProfile,
 } from '@/lib/operatorProfile';
-import { fetchOperatorPower, persistOperatorPower } from '@/lib/operatorProfileSync';
+import { fetchOperatorProfileRecord, persistOperatorProfileRecord } from '@/lib/operatorProfileSync';
 import { useApp } from '@/context/AppContext';
 import { useSessions } from '@/hooks/useSessions';
 import { useNets } from '@/hooks/useNets';
@@ -63,6 +63,7 @@ export default function App() {
   const [myGridsquare, setMyGridsquareState] = useState(savedProfile.gridsquare);
   const [myCity, setMyCityState] = useState(savedProfile.city);
   const [myPower, setMyPowerState] = useState(savedProfile.power);
+  const [myAntenna, setMyAntennaState] = useState(savedProfile.antenna);
   const [showAdminPosted, setShowAdminPosted] = useState(
     () => savedProfile.callsign.toUpperCase() === ADMIN_CALLSIGN
   );
@@ -94,7 +95,7 @@ export default function App() {
       mode: telemetry.mode || 'USB',
       frequency: telemetry.frequency,
       power: telemetry.power || '',
-      antenna: 'Dipole',
+      antenna: myAntenna,
       city: myCity,
       country: '',
       comments: '',
@@ -108,7 +109,7 @@ export default function App() {
       title: res.error ? t('reportError') : t('catAutoSubmit'),
       message: res.error ? '' : `SILENT CQ automatically updated to ${telemetry.frequency} MHz (${telemetry.mode})`,
     });
-  }, [pushToast, t, myCallsign, myGridsquare, myCity, createSession]);
+  }, [pushToast, t, myCallsign, myGridsquare, myCity, myAntenna, createSession]);
 
   const handleVfoMove = useCallback(() => {
     supabase
@@ -133,13 +134,21 @@ export default function App() {
     localStorage.setItem('scq_pos', JSON.stringify(p));
   };
 
-  const handleLogin = (callsign: string, gridsquare: string, city: string, power: number, connectRadio: boolean) => {
+  const handleLogin = (
+    callsign: string,
+    gridsquare: string,
+    city: string,
+    power: number,
+    connectRadio: boolean,
+    antenna: string
+  ) => {
     setMyCallsignState(callsign);
     setMyGridsquareState(gridsquare);
     setMyCityState(city);
     setMyPowerState(power);
-    saveOperatorProfile({ callsign, gridsquare, city, power });
-    void persistOperatorPower(callsign, power);
+    setMyAntennaState(antenna);
+    saveOperatorProfile({ callsign, gridsquare, city, power, antenna });
+    void persistOperatorProfileRecord(callsign, { power, antenna });
     const coords = gridToLatLng(gridsquare);
     if (coords) setMyPos(coords);
     if (connectRadio) {
@@ -162,14 +171,20 @@ export default function App() {
     const profile = loadOperatorProfile();
     if (!isProfileComplete(profile)) return;
     let cancelled = false;
-    fetchOperatorPower(profile.callsign).then((power) => {
-      if (cancelled) return;
-      if (power == null) {
-        void persistOperatorPower(profile.callsign, profile.power);
-        return;
+    fetchOperatorProfileRecord(profile.callsign).then((record) => {
+      if (cancelled || !record) return;
+      if (record.power == null) {
+        void persistOperatorProfileRecord(profile.callsign, { power: profile.power });
+      } else {
+        setMyPowerState(record.power);
+        saveOperatorProfile({ power: record.power });
       }
-      setMyPowerState(power);
-      saveOperatorProfile({ power });
+      if (record.antenna == null) {
+        void persistOperatorProfileRecord(profile.callsign, { antenna: profile.antenna });
+      } else {
+        setMyAntennaState(record.antenna);
+        saveOperatorProfile({ antenna: record.antenna });
+      }
     });
     return () => {
       cancelled = true;
@@ -220,7 +235,7 @@ export default function App() {
     if (parsedPower != null) {
       setMyPowerState(parsedPower);
       saveOperatorProfile({ power: parsedPower });
-      void persistOperatorPower(myCallsign, parsedPower);
+      void persistOperatorProfileRecord(myCallsign, { power: parsedPower });
     }
     if (payload.gridsquare.trim()) {
       const grid = payload.gridsquare.trim().toUpperCase();
@@ -270,7 +285,7 @@ export default function App() {
     (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase() && s.is_proxy !== true
   );
 
-  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity, power: myPower };
+  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity, power: myPower, antenna: myAntenna };
   if (!isProfileComplete(profile)) {
     return (
       <LoginScreen
@@ -279,6 +294,7 @@ export default function App() {
         initialGridsquare={myGridsquare}
         initialCity={myCity}
         initialPower={myPower}
+        initialAntenna={myAntenna}
         cityOnly={needsCityPrompt(profile)}
       />
     );
@@ -350,6 +366,7 @@ export default function App() {
               myGridsquare={myGridsquare}
               myCity={myCity}
               myPower={String(myPower)}
+              myAntenna={myAntenna}
               liveNet={liveNet}
               catTelemetry={cat.telemetry}
               catConnected={cat.connected}

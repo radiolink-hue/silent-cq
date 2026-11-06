@@ -35,6 +35,7 @@ describe('operator profile onboarding', () => {
       gridsquare: 'KM72',
       city: 'Tel Aviv',
       power: 250,
+      antenna: 'Dipole',
     });
     assert.equal(isProfileComplete(profile), true);
     assert.equal(needsCityPrompt(profile), false);
@@ -91,6 +92,20 @@ describe('operator profile onboarding', () => {
     });
     saveOperatorProfile({ power: 1500 }, storage);
     assert.equal(storage.snapshot().scq_power, '1500');
+  });
+
+  it('persists an antenna from the onboarding list and ignores unknown values', () => {
+    const storage = memoryStorage({
+      scq_callsign: '4X1AA',
+      scq_gridsquare: 'KM72',
+      scq_city: 'Tel Aviv',
+    });
+    saveOperatorProfile({ antenna: ' Yagi ' }, storage);
+    assert.equal(storage.snapshot().scq_antenna, 'Yagi');
+    assert.equal(loadOperatorProfile(storage).antenna, 'Yagi');
+    saveOperatorProfile({ antenna: 'Longwire' }, storage);
+    assert.equal(storage.snapshot().scq_antenna, 'Yagi');
+    assert.equal(loadOperatorProfile(memoryStorage({ scq_antenna: 'Beam' })).antenna, 'Dipole');
   });
 });
 

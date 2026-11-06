@@ -1,19 +1,24 @@
+import { ANTENNAS } from '../types.ts';
+
 export const PROFILE_KEYS = {
   callsign: 'scq_callsign',
   gridsquare: 'scq_gridsquare',
   city: 'scq_city',
   power: 'scq_power',
+  antenna: 'scq_antenna',
 } as const;
 
 export const DEFAULT_OPERATOR_POWER = 100;
 export const MIN_OPERATOR_POWER = 1;
 export const MAX_OPERATOR_POWER = 1500;
+export const DEFAULT_OPERATOR_ANTENNA = 'Dipole';
 
 export interface OperatorProfile {
   callsign: string;
   gridsquare: string;
   city: string;
   power: number;
+  antenna: string;
 }
 
 export function trimProfileField(value: string | null | undefined): string {
@@ -35,6 +40,12 @@ export function parseOperatorPower(value: string | number | null | undefined): n
   return n;
 }
 
+/** One of the Call Silent CQ antenna choices, or null when the value is unknown. */
+export function normalizeOperatorAntenna(value: string | null | undefined): string | null {
+  const trimmed = trimProfileField(value);
+  return (ANTENNAS as readonly string[]).includes(trimmed) ? trimmed : null;
+}
+
 export function loadOperatorProfile(
   storage: Pick<Storage, 'getItem'> = localStorage
 ): OperatorProfile {
@@ -43,6 +54,7 @@ export function loadOperatorProfile(
     gridsquare: trimProfileField(storage.getItem(PROFILE_KEYS.gridsquare)).toUpperCase(),
     city: trimProfileField(storage.getItem(PROFILE_KEYS.city)),
     power: parseOperatorPower(storage.getItem(PROFILE_KEYS.power)) ?? DEFAULT_OPERATOR_POWER,
+    antenna: normalizeOperatorAntenna(storage.getItem(PROFILE_KEYS.antenna)) ?? DEFAULT_OPERATOR_ANTENNA,
   };
 }
 
@@ -56,6 +68,10 @@ export function saveOperatorProfile(
   if (profile.power != null) {
     const power = parseOperatorPower(profile.power);
     if (power != null) storage.setItem(PROFILE_KEYS.power, String(power));
+  }
+  if (profile.antenna != null) {
+    const antenna = normalizeOperatorAntenna(profile.antenna);
+    if (antenna != null) storage.setItem(PROFILE_KEYS.antenna, antenna);
   }
 }
 
