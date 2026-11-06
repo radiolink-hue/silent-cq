@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CqSession, NewCqSession, CqEventKind, CqSignalReport, NewCqSignalReport } from '@/types';
 import { isExpiredCqSession } from '@/lib/cqPresence';
+import { chooseSpotToOverwrite, oneActiveSpotPerCallsign } from '@/lib/spotDedup';
 import { ADMIN_CALLSIGN, findProxyDuplicate, hydrateProxySession, withProxyRfFallback } from '@/lib/adminProxy';
 
 function filterExpired(list: CqSession[]): CqSession[] {
@@ -52,7 +53,7 @@ export function useSessions(pollWhenVisible = false) {
       if (!opts?.silent) setError(true);
     } else {
       setError(false);
-      const next = filterExpired(data ?? []);
+      const next = oneActiveSpotPerCallsign(filterExpired(data ?? []));
       setSessions((prev) => (sameSessionList(prev, next) ? prev : next));
     }
     if (!opts?.silent) setLoading(false);
@@ -78,16 +79,12 @@ export function useSessions(pollWhenVisible = false) {
         { event: '*', schema: 'public', table: 'cq_sessions' },
         (payload) => {
           setSessions((prev) => {
-            if (payload.eventType === 'INSERT') {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const row = payload.new as CqSession;
-              if (!row.active || isExpiredCqSession(row)) return prev;
-              if (prev.some((s) => s.id === row.id)) return prev;
-              return [row, ...prev];
-            }
-            if (payload.eventType === 'UPDATE') {
-              const row = payload.new as CqSession;
-              if (!row.active || isExpiredCqSession(row)) return prev.filter((s) => s.id !== row.id);
-              return prev.map((s) => (s.id === row.id ? row : s));
+              if (!row.active || isExpiredCqSession(row)) {
+                return oneActiveSpotPerCallsign(prev.filter((s) => s.id !== row.id));
+              }
+              return oneActiveSpotPerCallsign([row, ...prev.filter((s) => s.id !== row.id)]);
             }
             if (payload.eventType === 'DELETE') {
               const old = payload.old as { id: string };
@@ -122,7 +119,10 @@ export function useSessions(pollWhenVisible = false) {
               .in('id', expired.map((s) => s.id));
           })();
         }
-        return kept.length !== prev.length ? kept : prev;
+        const next = oneActiveSpotPerCallsign(kept);
+        const unchanged =
+          next.length === prev.length && next.every((row, index) => row === prev[index]);
+        return unchanged ? prev : next;
       });
     }, 30_000);
     return () => clearInterval(interval);
@@ -141,18 +141,15 @@ export function useSessions(pollWhenVisible = false) {
     const key = payload.callsign.trim().toUpperCase();
     const { data: live } = await supabase
       .from('cq_sessions')
-      .select('id, callsign')
+      .select('id, callsign, created_at')
       .eq('active', true);
-    const ids = ((live ?? []) as { id: string; callsign: string }[])
-      .filter((s) => s.callsign.trim().toUpperCase() === key)
-      .map((s) => s.id);
-    if (ids.length > 0) {
-      await supabase.from('cq_sessions').update({ active: false }).in('id', ids);
-    }
+    const { keep, retireIds } = chooseSpotToOverwrite(
+      (live ?? []) as { id: string; callsign: string; created_at?: string }[],
+      key
+    );
 
-    // Regular Call Silent CQ: never send proxy or AllStar columns.
     const row = {
-      callsign: payload.callsign,
+      callsign: key,
       gridsquare: payload.gridsquare,
       band: payload.band,
       mode: payload.mode,
@@ -164,31 +161,59 @@ export function useSessions(pollWhenVisible = false) {
       comments: payload.comments ?? '',
       lat: payload.lat ?? null,
       lng: payload.lng ?? null,
+      active: true,
+      created_at: new Date().toISOString(),
     };
 
-    const { data, error: err } = await supabase
-      .from('cq_sessions')
-      .insert(row)
-      .select()
-      .maybeSingle();
+    const publish = (session: CqSession) => {
+      const visible = hydrateProxySession({ ...session, is_proxy: false, proxy_added_by: null });
+      setSessions((prev) => oneActiveSpotPerCallsign([visible, ...prev.filter((s) => s.id !== visible.id)]));
+    };
+
+    if (keep) {
+      if (retireIds.length > 0) {
+        await supabase.from('cq_sessions').update({ active: false }).in('id', retireIds);
+      }
+      let updated = await supabase
+        .from('cq_sessions')
+        .update({ ...row, is_proxy: false, proxy_added_by: null })
+        .eq('id', keep.id)
+        .select()
+        .maybeSingle();
+      if (updated.error || !updated.data) {
+        updated = await supabase.from('cq_sessions').update(row).eq('id', keep.id).select().maybeSingle();
+      }
+      if (updated.error || !updated.data) return { error: true as const };
+
+      const session = updated.data as CqSession;
+      publish(session);
+      await supabase.from('cq_events').insert({
+        session_id: session.id,
+        kind: 'new_cq' satisfies CqEventKind,
+        from_callsign: session.callsign,
+        target_callsign: '',
+        band: session.band,
+        mode: session.mode,
+        message: `${session.callsign} · ${session.band} ${session.mode} ${session.frequency}`.trim(),
+      });
+      return { error: false as const, session };
+    }
+
+    const { data, error: err } = await supabase.from('cq_sessions').insert(row).select().maybeSingle();
     if (err || !data) return { error: true as const };
 
     const session = data as CqSession;
-    setSessions((prev) => [
-      session,
-      ...prev.filter((s) => s.callsign.toUpperCase() !== payload.callsign.toUpperCase()),
-    ]);
-
+    publish(session);
     await supabase.from('cq_events').insert({
-      session_id: data.id,
+      session_id: session.id,
       kind: 'new_cq' satisfies CqEventKind,
-      from_callsign: data.callsign,
+      from_callsign: session.callsign,
       target_callsign: '',
-      band: data.band,
-      mode: data.mode,
-      message: `${data.callsign} · ${data.band} ${data.mode} ${data.frequency}`.trim(),
+      band: session.band,
+      mode: session.mode,
+      message: `${session.callsign} · ${session.band} ${session.mode} ${session.frequency}`.trim(),
     });
-    return { error: false as const, session: data as CqSession };
+    return { error: false as const, session };
   }, []);
 
   const createProxySession = useCallback(async (payload: NewCqSession, postedBy: string) => {

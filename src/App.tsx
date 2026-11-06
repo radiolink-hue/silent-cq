@@ -35,8 +35,8 @@ import { isManagerOrAdmin } from '@/utils/managerCheck';
 import { Calendar, Shield } from 'lucide-react';
 
 export default function App() {
-  const { t, lang } = useApp();
-  const [tab, setTab] = useState<Tab>('active');
+  const { t, lang, applyDashboardDefaults } = useApp();
+  const [tab, setTab] = useState<Tab>('call');
   const {
     sessions,
     loading,
@@ -149,6 +149,7 @@ export default function App() {
     setMyAntennaState(antenna);
     saveOperatorProfile({ callsign, gridsquare, city, power, antenna });
     void persistOperatorProfileRecord(callsign, { power, antenna });
+    applyDashboardDefaults(true);
     const coords = gridToLatLng(gridsquare);
     if (coords) setMyPos(coords);
     if (connectRadio) {
@@ -280,13 +281,26 @@ export default function App() {
     });
   };
 
+  const profile = {
+    callsign: myCallsign,
+    gridsquare: myGridsquare,
+    city: myCity,
+    power: myPower,
+    antenna: myAntenna,
+  };
+  const profileComplete = isProfileComplete(profile);
+
+  useEffect(() => {
+    if (!profileComplete) return;
+    applyDashboardDefaults();
+  }, [profileComplete, applyDashboardDefaults]);
+
   const isAdmin = myCallsign.toUpperCase() === ADMIN_CALLSIGN;
   const hasActiveCQ = sessions.some(
     (s) => s.callsign.toUpperCase() === myCallsign.toUpperCase() && s.is_proxy !== true
   );
 
-  const profile = { callsign: myCallsign, gridsquare: myGridsquare, city: myCity, power: myPower, antenna: myAntenna };
-  if (!isProfileComplete(profile)) {
+  if (!profileComplete) {
     return (
       <LoginScreen
         onLogin={handleLogin}

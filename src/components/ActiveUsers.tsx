@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { RadioTower, Loader2, AlertTriangle } from 'lucide-react';
 import { CqSession, CqSignalReport } from '@/types';
+import { oneActiveSpotPerCallsign } from '@/lib/spotDedup';
 import { useApp } from '@/context/AppContext';
 import SessionCard from '@/components/SessionCard';
 import FilterBar from '@/components/FilterBar';
@@ -44,7 +45,7 @@ export default function ActiveUsers({
     localStorage.setItem('scq_condensed_view', value ? '1' : '0');
   };
 
-  const filtered = sessions.filter(
+  const filtered = oneActiveSpotPerCallsign(sessions).filter(
     (s) => (!band || s.band === band) && (!mode || s.mode === mode)
   );
 
